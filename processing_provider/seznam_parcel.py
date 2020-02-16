@@ -25,7 +25,7 @@ from qgis.core import (QgsProcessing,
                        QgsProject,
                        QgsProcessingUtils
                        )
-from qgis import processing
+import processing
 import psycopg2
 from pathlib import Path
 from .general_modules import *
@@ -153,6 +153,12 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 'OUTPUT': 'memory:'
             }, context=context, feedback=feedback)['OUTPUT'] 
 
+        dissol = processing.run("native:dissolve", {
+                'INPUT':fix_geom,
+                'FIELD':[],
+                'OUTPUT':'memory:'
+            }, context=context, feedback=feedback)['OUTPUT'] 
+
 
         feedback.setCurrentStep(1)
         if feedback.isCanceled():
@@ -177,7 +183,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # Obreži
         clip = processing.run('native:clip', {
                 'INPUT': vlayer,
-                'OVERLAY': fix_geom,
+                'OVERLAY': dissol,
                 'OUTPUT': "memory:"
             }, context=context, feedback=feedback)['OUTPUT']       
         
@@ -189,7 +195,18 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         
         # Refactor fields
         refa = processing.run('qgis:refactorfields', {
-                'FIELDS_MAPPING': [{'expression': '"fid"', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 4}, {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2}, {'expression': '"parcela"', 'length': 10, 'name': 'parcela', 'precision': 0, 'type': 10}, {'expression': '"IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10}, {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10}, {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6}, {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10}, {'expression': '"Naslov"', 'length': 0, 'name': 'Naslov', 'precision': 0, 'type': 10}, {'expression': '"Dovoljenje"', 'length': 0, 'name': 'Dovoljenje', 'precision': 0, 'type': 10}, {'expression': '"Kontakt"', 'length': 0, 'name': 'Kontakt', 'precision': 0, 'type': 10}, {'expression': '"Opombe"', 'length': 0, 'name': 'Opombe', 'precision': 0, 'type': 10}],
+                'FIELDS_MAPPING': [
+                    {'expression': '"fid"', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 4}, 
+                    {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2}, 
+                    {'expression': '"parcela"', 'length': 10, 'name': 'parcela', 'precision': 0, 'type': 10}, 
+                    {'expression': '"IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10}, 
+                    {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10}, 
+                    {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6}, 
+                    {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10}, 
+                    {'expression': '"Naslov"', 'length': 0, 'name': 'Naslov', 'precision': 0, 'type': 10}, 
+                    {'expression': '"Dovoljenje"', 'length': 0, 'name': 'Dovoljenje', 'precision': 0, 'type': 10}, 
+                    {'expression': '"Kontakt"', 'length': 0, 'name': 'Kontakt', 'precision': 0, 'type': 10}, 
+                    {'expression': '"Opombe"', 'length': 0, 'name': 'Opombe', 'precision': 0, 'type': 10}],
                 'INPUT': clip,
                 'OUTPUT': "memory:"
             }, context=context, feedback=feedback)['OUTPUT']
@@ -238,6 +255,46 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # statistics, etc. These should all be included in the returned
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
+
+
+        area = 0
+        cnt = 0
+        for f in refa.getFeatures():
+            farea = f['površina na trasi']
+            area = f['površina na trasi'] + area
+            cnt = cnt + 1
+        out_text = """
+        *******
+        
+        Znotraj trase je %s parcel.
+        Skupna površina trase je %s m2.
+        
+        Parcele:
+        """ %(cnt, round(area,2))
+        feedback.pushInfo(out_text)    
+   
+        idx = refa.fields().indexOf('sifko')
+        values = refa.uniqueValues(idx)
+        prag = 1
+
+        for val in values:
+            parc_ls = []
+            for f in refa.getFeatures():
+                imeko = f['IMEKO']
+                if f['površina na trasi'] > prag:
+                    parc_ls.append(f['parcela'])
+                else:
+                    pass
+
+            out_text_parc = """
+            %s, k.o. %s - %s
+            """ %(', '.join(parc_ls), imeko, val) 
+            feedback.pushInfo(out_text_parc)
+
+        feedback.pushInfo('''
+        Pri tem izpisu niso upoštevane parcele s površino manjšo od %s m2!!!
+        
+        *******''' % prag)
         self.dest_id=dest_id
         return {self.OUTPUT: dest_id}
 
