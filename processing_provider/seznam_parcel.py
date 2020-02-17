@@ -111,8 +111,8 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Obmocje raziskave'),
-                [QgsProcessing.TypeVectorPolygon],
-                defaultValue='C:/Users/Mt/Desktop/ss.gpkg')
+                [QgsProcessing.TypeVectorPolygon]
+                )
             )
 
         # We add a feature sink in which to store our processed features (this
