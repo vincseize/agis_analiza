@@ -9,6 +9,8 @@
 *   (at your option) any later version.                                   *
 *                                                                         *
 ***************************************************************************
+Seznam parcel 0.1
+17.2.2020
 """
 
 from qgis.PyQt.QtCore import QCoreApplication
@@ -90,9 +92,9 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje sprejme območje (poligon) raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja. 
-        
-        Sloj je potrebno shraniti v arhiv projekta -> Načrti/GIS/00-0000 Seznam parcel.gpkg. 
+        help_text = """To orodje sprejme območje (poligon) raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja.
+
+        Sloj je potrebno shraniti v arhiv projekta -> Načrti/GIS/00-0000 Seznam parcel.gpkg.
         Simbologijo sloja je potrebno prenesti na nov shranjen sloj (Desni klik na sloj, Slog, Kopiraj slog).
         """
         return self.tr(help_text)
@@ -112,7 +114,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 [QgsProcessing.TypeVectorPolygon],
                 defaultValue='C:/Users/Mt/Desktop/ss.gpkg')
             )
-        
+
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
@@ -144,27 +146,27 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # helper text for when a source cannot be evaluated
         if source is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
-              
+
 
         # Popravi geometrije, območje
-   
+
         fix_geom = processing.run("native:fixgeometries", {
                 'INPUT': source,
                 'OUTPUT': 'memory:'
-            }, context=context, feedback=feedback)['OUTPUT'] 
+            }, context=context, feedback=feedback)['OUTPUT']
 
         dissol = processing.run("native:dissolve", {
                 'INPUT':fix_geom,
                 'FIELD':[],
                 'OUTPUT':'memory:'
-            }, context=context, feedback=feedback)['OUTPUT'] 
+            }, context=context, feedback=feedback)['OUTPUT']
 
 
         feedback.setCurrentStep(1)
         if feedback.isCanceled():
             return {}
 
-        feedback.pushInfo('Geometrija popravljena')
+        feedback.pushInfo('Geometrija popravljena, iščem parcele...')
 
 
         # Connect to an existing database
@@ -175,47 +177,47 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             feedback.pushInfo(conn_error)
         else:
             feedback.pushInfo(conn_success)
-        
+
         feedback.setCurrentStep(5)
         if feedback.isCanceled():
-            return {}   
+            return {}
 
         # Obreži
         clip = processing.run('native:clip', {
                 'INPUT': vlayer,
                 'OVERLAY': dissol,
                 'OUTPUT': "memory:"
-            }, context=context, feedback=feedback)['OUTPUT']       
-        
-             
+            }, context=context, feedback=feedback)['OUTPUT']
+
+
         feedback.setCurrentStep(7)
         if feedback.isCanceled():
             return {}
         feedback.pushInfo('Presek izračunan')
-        
+
         # Refactor fields
         refa = processing.run('qgis:refactorfields', {
                 'FIELDS_MAPPING': [
-                    {'expression': '"fid"', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 4}, 
-                    {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2}, 
-                    {'expression': '"parcela"', 'length': 10, 'name': 'parcela', 'precision': 0, 'type': 10}, 
-                    {'expression': '"IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10}, 
-                    {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10}, 
-                    {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6}, 
-                    {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10}, 
-                    {'expression': '"Naslov"', 'length': 0, 'name': 'Naslov', 'precision': 0, 'type': 10}, 
-                    {'expression': '"Dovoljenje"', 'length': 0, 'name': 'Dovoljenje', 'precision': 0, 'type': 10}, 
-                    {'expression': '"Kontakt"', 'length': 0, 'name': 'Kontakt', 'precision': 0, 'type': 10}, 
+                    {'expression': '"fid"', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 4},
+                    {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2},
+                    {'expression': '"parcela"', 'length': 10, 'name': 'parcela', 'precision': 0, 'type': 10},
+                    {'expression': '"IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10},
+                    {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10},
+                    {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6},
+                    {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10},
+                    {'expression': '"Naslov"', 'length': 0, 'name': 'Naslov', 'precision': 0, 'type': 10},
+                    {'expression': '"Dovoljenje"', 'length': 0, 'name': 'Dovoljenje', 'precision': 0, 'type': 10},
+                    {'expression': '"Kontakt"', 'length': 0, 'name': 'Kontakt', 'precision': 0, 'type': 10},
                     {'expression': '"Opombe"', 'length': 0, 'name': 'Opombe', 'precision': 0, 'type': 10}],
                 'INPUT': clip,
                 'OUTPUT': "memory:"
             }, context=context, feedback=feedback)['OUTPUT']
-        
+
         feedback.setCurrentStep(9)
         if feedback.isCanceled():
             return {}
-        feedback.pushInfo('Stolpci urejeni')
-        
+        feedback.pushInfo('Stolpci urejeni2')
+
         (sink, dest_id) = self.parameterAsSink(
             parameters,
             self.OUTPUT,
@@ -232,7 +234,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # helper text for when a sink cannot be evaluated
         if sink is None:
             raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
-               
+
         # Compute the number of steps to display within the progress bar and
         # get features from source
         total = 100.0 / refa.featureCount() if refa.featureCount() else 0
@@ -265,14 +267,14 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             cnt = cnt + 1
         out_text = """
         *******
-        
+
         Znotraj trase je %s parcel.
         Skupna površina trase je %s m2.
-        
+
         Parcele:
         """ %(cnt, round(area,2))
-        feedback.pushInfo(out_text)    
-   
+        feedback.pushInfo(out_text)
+
         idx = refa.fields().indexOf('sifko')
         values = refa.uniqueValues(idx)
         prag = 1
@@ -288,12 +290,12 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
 
             out_text_parc = """
             %s, k.o. %s - %s
-            """ %(', '.join(parc_ls), imeko, val) 
+            """ %(', '.join(parc_ls), imeko, val)
             feedback.pushInfo(out_text_parc)
 
         feedback.pushInfo('''
         Pri tem izpisu niso upoštevane parcele s površino manjšo od %s m2!!!
-        
+
         *******''' % prag)
         self.dest_id=dest_id
         return {self.OUTPUT: dest_id}
@@ -303,7 +305,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         PostProcessing Tasks to define the Symbology
         """
         output = QgsProcessingUtils.mapLayerFromString(self.dest_id, context)
-        output.loadNamedStyle(str(style_parcele))          
+        output.loadNamedStyle(str(style_parcele))
         output.triggerRepaint()
 
         return {self.OUTPUT: self.dest_id}
