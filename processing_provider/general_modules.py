@@ -12,24 +12,27 @@ p_styles = p_plugin/"styles"
 
 style_parcele = p_styles/"Seznam parcel_dovoljenja.qml"
 
-"""
+
 def postgres():
     uri = QgsDataSourceUri()
     host = "majadb"
     database = "CPA_Analiza"
-    user = "postgres"
-    password = "oza3131"
+    user = "cpa"
+    password = "cpa"
     port = '5432'
     uri.setConnection(host, port, database, user, password)
-    return uri    
+    return uri
 
 def postgres_layer():
     uri = postgres()
     uri.setDataSource('public', 'Parcele', 'geom',"", "id")
     parcele = QgsVectorLayer(uri.uri(), "parcele", "postgres")
     return parcele
-"""
 
+
+
+""""
+#test server
 def postgres():
     uri = QgsDataSourceUri()
     host = "localhost"
@@ -38,10 +41,11 @@ def postgres():
     password = "postgres"
     port = '5432'
     uri.setConnection(host, port, database, user, password)
-    return uri    
+    return uri
 
 def postgres_layer():
     uri = postgres()
     uri.setDataSource('test', 'ttt', 'geom',"", "id")
     parcele = QgsVectorLayer(uri.uri(), "parcele", "postgres")
     return parcele
+"""
