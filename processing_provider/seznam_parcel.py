@@ -14,7 +14,8 @@ Seznam parcel 0.1
 """
 
 from qgis.PyQt.QtCore import QCoreApplication
-from qgis.core import (QgsProcessing,
+from qgis.core import (Qgis,
+                       QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingException,
                        QgsProcessingAlgorithm,
@@ -25,12 +26,19 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingMultiStepFeedback,
                        QgsApplication,
                        QgsProject,
-                       QgsProcessingUtils
+                       QgsProcessingUtils,
+                       QgsProcessingParameterNumber,
+                       QgsCoordinateReferenceSystem,
+                       QgsVectorLayerJoinInfo
                        )
 import processing
 import psycopg2
 from pathlib import Path
-from .general_modules import *
+from ..general_modules import (path,
+                               wfs_layer
+                        )
+
+
 import os
 
 
@@ -42,6 +50,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
 
     INPUT = 'INPUT'
     OUTPUT = 'OUTPUT'
+    BUFFER_INPUT = 'BUFFER_INPUT'
 
     def tr(self, string):
         """
@@ -115,6 +124,16 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 )
             )
 
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.BUFFER_INPUT,
+                self.tr('Buffer'),
+                True,
+                [QgsProcessingParameterNumber.Double],
+                0
+                )
+            )
+
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
@@ -139,6 +158,8 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             self.INPUT,
             context
         )
+        buffer_value = parameters[self.BUFFER_INPUT]
+    
 
         # If source was not found, throw an exception to indicate that the algorithm
         # encountered a fatal error. The exception text can be any string, but in this
@@ -148,60 +169,141 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
 
 
-        # Popravi geometrije, območje
-
+        # Fix geometry
         fix_geom = processing.run("native:fixgeometries", {
                 'INPUT': source,
                 'OUTPUT': 'memory:'
-            }, context=context, feedback=feedback)['OUTPUT']
-
-        dissol = processing.run("native:dissolve", {
-                'INPUT':fix_geom,
-                'FIELD':[],
-                'OUTPUT':'memory:'
-            }, context=context, feedback=feedback)['OUTPUT']
-
-
+            }, context=context)['OUTPUT']
+        
+        feedback.pushInfo(self.tr('Geometry fixed.'))
         feedback.setCurrentStep(1)
         if feedback.isCanceled():
             return {}
 
-        feedback.pushInfo('Geometrija popravljena, iščem parcele...')
+        # Dissolve
+        dissol = processing.run("native:dissolve", {
+                'INPUT':fix_geom,
+                'FIELD':[],
+                'OUTPUT':'memory:'
+            }, context=context)['OUTPUT']
+
+        feedback.pushInfo(self.tr('Dissolved.'))
+        feedback.setCurrentStep(2)
+        if feedback.isCanceled():
+            return {}
 
 
-        # Connect to an existing database
-        conn_error = 'Povezava z podatkovno bazo je bila neuspešna'
-        conn_success = 'Povezava z podatkovno bazo je uspela'
-        vlayer = postgres_layer()
-        if not vlayer.isValid():
-            feedback.pushInfo(conn_error)
+        #Apply buffer and Reproject layer
+        
+        if buffer_value is not 0 :
+            buffer = processing.run("native:buffer", {
+                'DISSOLVE': False,
+                'DISTANCE': buffer_value,
+                'END_CAP_STYLE': 1,
+                'INPUT': dissol,
+                'JOIN_STYLE': 0,
+                'MITER_LIMIT': 2,
+                'SEGMENTS': 10,
+                'OUTPUT':'memory:'
+            }, context=context)['OUTPUT']
+            reprojected = processing.run("native:reprojectlayer", {
+                    'INPUT':buffer,
+                    'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3794'),
+                    'OUTPUT':'memory:'
+                }, context=context)['OUTPUT']
+            feedback.pushInfo(self.tr('%s m buffer applied, layer reprojected to EPSG:3794' % buffer_value))
+        else:  
+            reprojected = processing.run("native:reprojectlayer", {
+                    'INPUT':dissol,
+                    'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3794'),
+                    'OUTPUT':'memory:'
+                }, context=context)['OUTPUT']
+            feedback.pushInfo(self.tr('Layer reprojected to EPSG:3794'))
+
+        feedback.setCurrentStep(3)
+        if feedback.isCanceled():
+            return {}
+
+        extent = reprojected.extent()
+        xmin=extent.xMinimum()
+        xmax=extent.xMaximum()
+        ymin=extent.yMinimum()
+        ymax=extent.yMaximum()
+        extent = '%s %s, %s %s, %s %s, %s %s, %s %s' %(xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
+
+        # Connect to an INSPIRE Cadaster
+        parcels_sql = "SELECT * FROM CadastralParcel where ST_Intersects(geometry, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))"
+        parc_layer = wfs_layer(self, 'Parcele', 'cp:CadastralParcel', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-ins-wfs/cp/ows', parcels_sql)
+        
+      
+        ko_sql = "SELECT * FROM KO_G where ST_Intersects(KO_G.GEOMETRY, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))" 
+        ko_layer = wfs_layer(self, 'Ko', 'SI.GURS.ZK:KO_G', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-pub-wfs/ows', ko_sql)
+      
+        if parc_layer.isValid() and ko_layer.isValid():
+            feedback.pushInfo(self.tr('Success accessing Cadaster'))
         else:
-            feedback.pushInfo(conn_success)
+            feedback.pushDebugInfo(self.tr("Error, can not access Cadaster"))
+
+        feedback.setCurrentStep(4)
+        if feedback.isCanceled():
+            return {}
+                
+        # Clip
+        clip = processing.run('native:clip', {
+                'INPUT': parc_layer,
+                'OVERLAY': reprojected,
+                'OUTPUT': 'memory:'
+            }, context=context)['OUTPUT']
+        
+        feedback.pushInfo(self.tr('Cadaster cliped'))
 
         feedback.setCurrentStep(5)
         if feedback.isCanceled():
             return {}
 
-        # Obreži
-        clip = processing.run('native:clip', {
-                'INPUT': vlayer,
-                'OVERLAY': dissol,
+        #Join cadastral names
+        clip = processing.run('qgis:refactorfields', {
+                'FIELDS_MAPPING': [
+                    {'expression': "regexp_substr(nationalCadastralReference,'(\\\\d+)')", 'length': 0, 'name': 'SIFKO', 'precision': 0, 'type': 2},
+                    {'expression': '"label"', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10}], 
+                'INPUT': clip,
                 'OUTPUT': "memory:"
-            }, context=context, feedback=feedback)['OUTPUT']
+            }, context=context, )['OUTPUT']
 
 
-        feedback.setCurrentStep(7)
+        ko = processing.run('qgis:refactorfields', {
+                'FIELDS_MAPPING': [
+                    {'expression': "SIFKO", 'length': 0, 'name': 'SIFKO', 'precision': 0, 'type': 2},
+                    {'expression': '"IMEKO"', 'length': 0, 'name': 'IMEKO', 'precision': 0, 'type': 10}], 
+                'INPUT': ko_layer,
+                'OUTPUT': "memory:"
+            }, context=context, )['OUTPUT']
+
+
+        shpField = 'SIFKO'
+        csvField = 'SIFKO'
+        joinObject = QgsVectorLayerJoinInfo()
+        joinObject.setJoinFieldName(csvField)
+        joinObject.setTargetFieldName(shpField)
+        joinObject.setJoinLayerId(ko.id())
+        joinObject.setUsingMemoryCache(True)
+        joinObject.setJoinLayer(ko)
+        clip.addJoin(joinObject)
+
+        feedback.pushInfo(self.tr('Cadaster joined'))
+
+        feedback.setCurrentStep(6)
         if feedback.isCanceled():
             return {}
-        feedback.pushInfo('Presek izračunan')
+
 
         # Refactor fields
         refa = processing.run('qgis:refactorfields', {
                 'FIELDS_MAPPING': [
-                    {'expression': '"fid"', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 4},
+                    {'expression': '@row_number', 'length': 0, 'name': 'fid', 'precision': 0, 'type': 2},
                     {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2},
-                    {'expression': '"parcela"', 'length': 10, 'name': 'parcela', 'precision': 0, 'type': 10},
-                    {'expression': '"IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10},
+                    {'expression': '"parcela"', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10}, 
+                    {'expression':  '"output_IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10},
                     {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10},
                     {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6},
                     {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10},
@@ -211,12 +313,13 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                     {'expression': '"Opombe"', 'length': 0, 'name': 'Opombe', 'precision': 0, 'type': 10}],
                 'INPUT': clip,
                 'OUTPUT': "memory:"
-            }, context=context, feedback=feedback)['OUTPUT']
+            }, context=context, )['OUTPUT']
 
-        feedback.setCurrentStep(9)
+
+        feedback.pushInfo(self.tr('Fields refactored'))
+        feedback.setCurrentStep(7)
         if feedback.isCanceled():
             return {}
-        feedback.pushInfo('Stolpci urejeni2')
 
         (sink, dest_id) = self.parameterAsSink(
             parameters,
@@ -258,45 +361,47 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
-
+        #Output summary
         area = 0
         cnt = 0
         for f in refa.getFeatures():
             farea = f['površina na trasi']
             area = f['površina na trasi'] + area
             cnt = cnt + 1
-        out_text = """
+        out_text = self.tr("""
         *******
 
         Znotraj trase je %s parcel.
         Skupna površina trase je %s m2.
 
         Parcele:
-        """ %(cnt, round(area,2))
+        """) %(cnt, round(area,2))
         feedback.pushInfo(out_text)
 
         idx = refa.fields().indexOf('sifko')
         values = refa.uniqueValues(idx)
-        prag = 1
+        #Set treshold to not include parcel 
+        prag = 0.5
 
         for val in values:
             parc_ls = []
-            for f in refa.getFeatures():
-                imeko = f['IMEKO']
-                if f['površina na trasi'] > prag:
+            for f in refa.getFeatures():  
+                sifko = f['sifko']
+                if f['površina na trasi'] > prag and sifko == val:
                     parc_ls.append(f['parcela'])
+                    imeko = f['IMEKO']
                 else:
                     pass
-
             out_text_parc = """
             %s, k.o. %s - %s
-            """ %(', '.join(parc_ls), imeko, val)
+            """ %(', '.join(parc_ls), str(imeko), val)
             feedback.pushInfo(out_text_parc)
-
+        
         feedback.pushInfo('''
         Pri tem izpisu niso upoštevane parcele s površino manjšo od %s m2!!!
 
         *******''' % prag)
+
         self.dest_id=dest_id
         return {self.OUTPUT: dest_id}
 
@@ -305,6 +410,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         PostProcessing Tasks to define the Symbology
         """
         output = QgsProcessingUtils.mapLayerFromString(self.dest_id, context)
+        style_parcele = path('styles')/'Seznam parcel_dovoljenja.qml'
         output.loadNamedStyle(str(style_parcele))
         output.triggerRepaint()
 

@@ -10,7 +10,7 @@
 name=AGIS Analiza
 qgisMinimumVersion=3.0
 description=Zbirka orodij za arheologe analitike
-version=0.1
+version=0.2
 author=Matjaž Mori
 email=matjaz.mori@gmail.com
 
