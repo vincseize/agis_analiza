@@ -104,10 +104,13 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje sprejme območje (poligon) raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja.
+        help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja.
+        V primeru linij ali točk je obvezna vrednost bufferja. 
 
-        Sloj je potrebno shraniti v arhiv projekta -> Načrti/GIS/00-0000 Seznam parcel.gpkg.
-        Simbologijo sloja je potrebno prenesti na nov shranjen sloj (Desni klik na sloj, Slog, Kopiraj slog).
+        Po potrebi, se predhodno uporabi orodje "intersect" za izrez območij znotraj EŠD.
+        
+        Sloj shranimo v arhiv projekta -> Načrti/GIS/00-0000 Seznam parcel.gpkg.
+        
         """
         return self.tr(help_text)
 
