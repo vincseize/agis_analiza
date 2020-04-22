@@ -30,7 +30,7 @@ tags=python, archaeology
 
 homepage=http://homepage
 category=Plugins
-icon=icon.png
+icon=icons/agis_analiza.png
 # experimental flag
 experimental=True
 

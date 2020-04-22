@@ -30,6 +30,8 @@ from qgis.core import (Qgis,
                        QgsProcessingParameterNumber,
                        QgsCoordinateReferenceSystem,
                        QgsVectorLayerJoinInfo
+                     
+                    
                        )
 import processing
 import psycopg2
@@ -40,6 +42,7 @@ from ..general_modules import (path,
 
 
 import os
+
 
 
 class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
@@ -120,7 +123,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
                 self.tr('Obmocje raziskave'),
-                [QgsProcessing.TypeVectorPolygon]
+                [QgsProcessing.TypeVectorAnyGeometry]
                 )
             )
 
@@ -161,12 +164,16 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         buffer_value = parameters[self.BUFFER_INPUT]
     
 
+
         # If source was not found, throw an exception to indicate that the algorithm
         # encountered a fatal error. The exception text can be any string, but in this
         # case we use the pre-built invalidSourceError method to return a standard
         # helper text for when a source cannot be evaluated
         if source is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
+   
+        if str(source.geometryType()) != '2' and buffer_value == 0.0:
+            raise QgsProcessingException("Buffer value should not be 0 when not using polygon layers!")
 
 
         # Fix geometry
@@ -192,33 +199,30 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-
         #Apply buffer and Reproject layer
-        
-        if buffer_value is not 0 :
-            buffer = processing.run("native:buffer", {
-                'DISSOLVE': False,
-                'DISTANCE': buffer_value,
-                'END_CAP_STYLE': 1,
-                'INPUT': dissol,
-                'JOIN_STYLE': 0,
-                'MITER_LIMIT': 2,
-                'SEGMENTS': 10,
+     
+        if str(source.geometryType()) == '0':
+            cap_style = 2
+        else:
+            cap_style = 1
+
+        buffer = processing.run("native:buffer", {
+            'DISSOLVE': False,
+            'DISTANCE': buffer_value,
+            'END_CAP_STYLE': cap_style,
+            'INPUT': dissol,
+            'JOIN_STYLE': 0,
+            'MITER_LIMIT': 2,
+            'SEGMENTS': 10,
+            'OUTPUT':'memory:'
+        }, context=context)['OUTPUT']
+        reprojected = processing.run("native:reprojectlayer", {
+                'INPUT':buffer,
+                'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3794'),
                 'OUTPUT':'memory:'
             }, context=context)['OUTPUT']
-            reprojected = processing.run("native:reprojectlayer", {
-                    'INPUT':buffer,
-                    'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3794'),
-                    'OUTPUT':'memory:'
-                }, context=context)['OUTPUT']
-            feedback.pushInfo(self.tr('%s m buffer applied, layer reprojected to EPSG:3794' % buffer_value))
-        else:  
-            reprojected = processing.run("native:reprojectlayer", {
-                    'INPUT':dissol,
-                    'TARGET_CRS': QgsCoordinateReferenceSystem('EPSG:3794'),
-                    'OUTPUT':'memory:'
-                }, context=context)['OUTPUT']
-            feedback.pushInfo(self.tr('Layer reprojected to EPSG:3794'))
+        feedback.pushInfo(self.tr('%s m buffer applied, layer reprojected to EPSG:3794' % buffer_value))
+        
 
         feedback.setCurrentStep(3)
         if feedback.isCanceled():

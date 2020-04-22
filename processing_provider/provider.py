@@ -7,7 +7,9 @@ import os
 #from .katvkat import IzvoziKatalogVWord
 #from .se_catalog import IzvoziKatalogSeVWord
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
-
+from pathlib import Path
+from ..general_modules import (path             
+                        )
 
 class Provider(QgsProcessingProvider):
     def __init__(self):
@@ -31,10 +33,11 @@ class Provider(QgsProcessingProvider):
         This string should be as short as possible (e.g. "Lastools", not
         "Lastools version 1.0.1 64-bit") and localised.
         """
-        return self.tr('AGIS analiza v 0.1')
+        return self.tr('AGIS analiza v 0.2')
 
     def icon(self):
         """Should return a QIcon which is used for your provider inside
         the Processing toolbox.
         """
-        return QIcon(os.path.join(os.path.dirname(__file__),'icon.png'))
+        provider_icone = path('icons')/'agis_analiza.png'
+        return QIcon(str(provider_icone))

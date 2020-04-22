@@ -1,6 +1,6 @@
 <RCC>
     <qresource prefix="/plugins/agis_analiza" >
-        <file>icon_provider.png</file>
-		<file>icon.png</file>
+        <file>icons/agis_analiza.png</file>
     </qresource>
 </RCC>
+
