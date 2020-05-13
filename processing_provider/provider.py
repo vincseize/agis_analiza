@@ -5,7 +5,7 @@ import os
 #import algorithm
 #from .fileslist import Files2Table
 #from .katvkat import IzvoziKatalogVWord
-#from .se_catalog import IzvoziKatalogSeVWord
+from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from pathlib import Path
 from ..general_modules import (path             
@@ -20,8 +20,7 @@ class Provider(QgsProcessingProvider):
         #self.addAlgorithm(Files2Table())
         #self.addAlgorithm(IzvoziKatalogVWord())
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
-        # add additional algorithms here
-        # self.addAlgorithm(MyOtherAlgorithm())
+        self.addAlgorithm(UpdateZkn())
 
 
     def id(self):
