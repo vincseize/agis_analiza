@@ -4,7 +4,7 @@ import os
 
 #import algorithm
 #from .fileslist import Files2Table
-#from .katvkat import IzvoziKatalogVWord
+from .update_ear import UpdateEar
 from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from pathlib import Path
@@ -18,7 +18,7 @@ class Provider(QgsProcessingProvider):
 
     def loadAlgorithms(self, *args, **kwargs):
         #self.addAlgorithm(Files2Table())
-        #self.addAlgorithm(IzvoziKatalogVWord())
+        self.addAlgorithm(UpdateEar())
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
         self.addAlgorithm(UpdateZkn())
 

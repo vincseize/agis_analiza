@@ -38,7 +38,8 @@ from ..general_modules import (path,
                                wfs_layer
                         )
 
-from datetime import date
+
+from datetime import datetime, date
 import os
 
 
@@ -83,7 +84,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
         Returns the name of the group this algorithm belongs to. This string
         should be localised.
         """
-        return self.tr('Posodobitve majadb')
+        return self.tr('majadb vzdrževanje')
 
     def groupId(self):
         """
@@ -101,7 +102,11 @@ class UpdateZkn(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje sprejme ZKN ter posodobi potatek v podatkovni bazi.
+        help_text = """To orodje sprejme ZKN ter ga posodobi v podatkovni bazi. Sveži podatki se pridobijo na https://egp.gu.gov.si/egp/.
+
+        Posodabljanje traja okoli 2.5 h vendar močno ne obremeni sistema. 
+
+        Vse spremembe so potrjene po uspešnem postopku, ob vmesni prekinitvi se sloj vrne v prvotno stanje. 
         
         """
         return self.tr(help_text)
@@ -194,8 +199,8 @@ class UpdateZkn(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
    
         if source.featureCount() < 3000000:
-            feedback.reportError("Majhno število parcel: %s, preveri vhodni sloj!!" % source.featureCount())
-            #raise QgsProcessingException("Majhno število parcel: %s, preveri vhodni sloj!!" % source.featureCount())
+            #feedback.reportError("Majhno število parcel: %s, preveri vhodni sloj!!" % source.featureCount())
+            raise QgsProcessingException("Majhno število parcel: %s, preveri vhodni sloj!!" % source.featureCount())
             
 
         total = 100.0 / source.featureCount() if source.featureCount() else 0
@@ -209,10 +214,12 @@ class UpdateZkn(QgsProcessingAlgorithm):
             connect_timeout=1 
         )     
         
+        feedback.pushInfo('Brišem stare podatke.')
         cursor = connection.cursor()
         sql = "TRUNCATE \"CPA\".\"ZKN parcele_gurs\" RESTART IDENTITY"
         cursor.execute(sql)
-      
+        
+        feedback.pushInfo('Vnašam %s novih parcel.. (%s)' % (source.featureCount(),str(datetime.now().time())))
         features = source.getFeatures()
         for current, feature in enumerate(features):
             pc_mid = feature[parameters['pc_mid']]
@@ -221,12 +228,17 @@ class UpdateZkn(QgsProcessingAlgorithm):
             vrstap = feature[parameters['vrstap']]
             rang = feature[parameters['rang']]
             sys_oddtm = feature[parameters['sys']] 
-            sys_oddtm = str(sys_oddtm)
+            sys = sys_oddtm.toString('yyyy-MM-dd')
             geom = feature.geometry()
-            sql_insert = "INSERT INTO \"CPA\".\"ZKN parcele_gurs\" (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, %s, %s, %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm,geom.asWkt())
+            sql_insert = "INSERT INTO \"CPA\".\"ZKN parcele_gurs\" (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, %s, \'%s\', %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (pc_mid, sifko, parcela, vrstap, rang, sys, geom.asWkt())
             cursor.execute(sql_insert)
+            if current % 100000 == 0:
+                now = str(datetime.now().time())
+                feedback.pushInfo('Vnešenih %s od %s parcel (%s)' %(current, source.featureCount(), now))
             feedback.setProgress(int(current * total))
- 
+            if feedback.isCanceled():
+                return {}
+                
         today = date.today()
         sql_update_comment = "COMMENT ON TABLE \"CPA\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s\'" % date.today()
         cursor.execute(sql_update_comment)
