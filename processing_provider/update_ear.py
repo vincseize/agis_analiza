@@ -284,7 +284,7 @@ class UpdateEar(QgsProcessingAlgorithm):
                 if feedback.isCanceled():
                     return {}
                 feedback.pushInfo('Uspešno vnešenih %s vrstic.' % source.featureCount())
-            sql_update_comment = "COMMENT ON TABLE \"Evidenca_arheoloskih_raziskav\".\"Porocila za SHP\" IS \'Datum zadnje posodobitve: %s\.\''" % date.today()
+            sql_update_comment = "COMMENT ON TABLE \"Evidenca_arheoloskih_raziskav\".\"Porocila za SHP\" IS \'Datum zadnje posodobitve: %s.\'" % date.today()
             cursor.execute(sql_update_comment)
 
 
