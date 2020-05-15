@@ -27,16 +27,18 @@ from qgis.core import (Qgis,
                        QgsApplication,
                        QgsProcessingParameterString,
                        QgsProcessingParameterField,
-                       QgsProcessingParameterDefinition
+                       QgsProcessingParameterDefinition,
+                       QgsProcessingParameterAuthConfig,         
+                       QgsAuthMethodConfig,
+                       QgsProcessingParameterBoolean,
+                       QgsProcessingParameterFile
                      
                     
                        )
 import processing
 import psycopg2
 from pathlib import Path
-from ..general_modules import (path,
-                               wfs_layer
-                        )
+from ..general_modules import (pg_connect)
 
 
 from datetime import datetime, date
@@ -128,26 +130,11 @@ class UpdateZkn(QgsProcessingAlgorithm):
             )
         )
         
-        try:
-            default_user = os.getlogin()
-        except:
-            default_user = ''
-
         self.addParameter(
-            QgsProcessingParameterString(
-                'uporabnik', 
-                'uporabnik', 
-                multiLine=False, 
-                defaultValue=default_user
-            )
-        )
-
-        self.addParameter(
-            QgsProcessingParameterString(
-                'geslo', 
-                'geslo', 
-                multiLine=False, 
-                defaultValue=''
+            QgsProcessingParameterAuthConfig(
+                'authentication', 
+                'authentication', 
+                defaultValue=None
             )
         )
         
@@ -179,8 +166,22 @@ class UpdateZkn(QgsProcessingAlgorithm):
         """
         feedback = QgsProcessingMultiStepFeedback(1, feedback)
 
-        user = parameters['uporabnik']
-        password = parameters['geslo']
+        auth_method_id = self.parameterAsString(
+            parameters,
+            'authentication',
+            context
+        )
+        # get the application's authenticaion manager
+        auth_mgr = QgsApplication.authManager()
+        # create an empty authmethodconfig object
+        auth_cfg = QgsAuthMethodConfig()
+        # load config from manager to the new config instance and decrypt sensitive data
+        auth_mgr.loadAuthenticationConfig(auth_method_id, auth_cfg, True)
+        # get the configuration information (including username and password)
+        auth = auth_cfg.configMap()
+
+        password = auth["password"]
+        user = auth["username"]
         
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
@@ -205,18 +206,11 @@ class UpdateZkn(QgsProcessingAlgorithm):
 
         total = 100.0 / source.featureCount() if source.featureCount() else 0
 
-        connection = psycopg2.connect(
-            host="majadb",
-            port="5432", 
-            database="CPA_Analiza", 
-            user=user, 
-            password=password, 
-            connect_timeout=1 
-        )     
+        connection = pg_connect(self, user, password)
         
         feedback.pushInfo('Brišem stare podatke.')
         cursor = connection.cursor()
-        sql = "TRUNCATE \"CPA\".\"ZKN parcele_gurs\" RESTART IDENTITY"
+        sql = "TRUNCATE \"Podlage\".\"ZKN parcele_gurs\" RESTART IDENTITY"
         cursor.execute(sql)
         
         feedback.pushInfo('Vnašam %s novih parcel.. (%s)' % (source.featureCount(),str(datetime.now().time())))
@@ -230,7 +224,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
             sys_oddtm = feature[parameters['sys']] 
             sys = sys_oddtm.toString('yyyy-MM-dd')
             geom = feature.geometry()
-            sql_insert = "INSERT INTO \"CPA\".\"ZKN parcele_gurs\" (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, %s, \'%s\', %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (pc_mid, sifko, parcela, vrstap, rang, sys, geom.asWkt())
+            sql_insert = "INSERT INTO \"Podlage\".\"ZKN parcele_gurs\" (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, %s, \'%s\', %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (pc_mid, sifko, parcela, vrstap, rang, sys, geom.asWkt())
             cursor.execute(sql_insert)
             if current % 100000 == 0:
                 now = str(datetime.now().time())
@@ -240,7 +234,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
                 return {}
                 
         today = date.today()
-        sql_update_comment = "COMMENT ON TABLE \"CPA\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s\'" % date.today()
+        sql_update_comment = "COMMENT ON TABLE \"Podlage\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
         cursor.execute(sql_update_comment)
         connection.commit()
 

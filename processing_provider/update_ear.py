@@ -9,8 +9,8 @@
 *   (at your option) any later version.                                   *
 *                                                                         *
 ***************************************************************************
-Update ZKN
-13.5.2020
+Update ear
+14.5.2020
 """
 
 from qgis.PyQt.QtCore import QCoreApplication
@@ -36,14 +36,11 @@ from qgis.core import (Qgis,
                        )
 import processing
 import psycopg2
-from pathlib import Path
-from ..general_modules import (path,
-                               wfs_layer
-                        )
+from ..general_modules import pg_connect
 
 from datetime import datetime, date
 import os
-import base64
+
 
 
 class UpdateEar(QgsProcessingAlgorithm):
@@ -106,7 +103,7 @@ class UpdateEar(QgsProcessingAlgorithm):
         """
         help_text = """To orodje sprejme tabelo iz Accessa (Porocila za SHP) ter posodobi sloj EAR za pregledovalnike.
 
-        Posodabljanje traja okoli ** h. 
+        Posodabljanje traja nekaj sekund. 
 
         Vse spremembe so potrjene po uspešnem postopku, ob vmesni prekinitvi se sloj vrne v prvotno stanje. 
         
@@ -222,17 +219,9 @@ class UpdateEar(QgsProcessingAlgorithm):
         user = auth["username"]
 
     
-        connection = psycopg2.connect(
-            host="majadb",
-            port="5432", 
-            database="CPA_Analiza", 
-            user=user, 
-            password=password, 
-            connect_timeout=1 
-        )     
+        connection = pg_connect(self, user, password)
+       
         cursor = connection.cursor()
-
-
 
         if not parameters['update_only']:
             source = self.parameterAsVectorLayer(
@@ -283,7 +272,7 @@ class UpdateEar(QgsProcessingAlgorithm):
                 feedback.setProgress(int(current * total))
                 if feedback.isCanceled():
                     return {}
-                feedback.pushInfo('Uspešno vnešenih %s vrstic.' % source.featureCount())
+                feedback.pushInfo('Vnešenih %s vrstic.' % source.featureCount())
             sql_update_comment = "COMMENT ON TABLE \"Evidenca_arheoloskih_raziskav\".\"Porocila za SHP\" IS \'Datum zadnje posodobitve: %s.\'" % date.today()
             cursor.execute(sql_update_comment)
 
@@ -298,6 +287,6 @@ class UpdateEar(QgsProcessingAlgorithm):
         cursor.execute(sql_update_comment_view)
         connection.commit()
 
-        feedback.pushInfo('Uspešno posodobljeno.' )
+        feedback.pushInfo('Spremembe uspešno posodobljene.' )
         
         return {}

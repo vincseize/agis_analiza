@@ -29,15 +29,17 @@ from qgis.core import (Qgis,
                        QgsProcessingUtils,
                        QgsProcessingParameterNumber,
                        QgsCoordinateReferenceSystem,
-                       QgsVectorLayerJoinInfo
-                     
-                    
+                       QgsVectorLayerJoinInfo,
+                       QgsProcessingParameterBoolean
+                                         
                        )
 import processing
 import psycopg2
 from pathlib import Path
 from ..general_modules import (path,
-                               wfs_layer
+                               wfs_layer,
+                               access,
+                               postgis_connect
                         )
 
 
@@ -122,6 +124,16 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
 
         # We add the input vector features source. It can have any kind of
         # geometry.
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                'use_zkp', 
+                'Uporabi zemljiškokatastrski pregled zamesto načrta.',
+                 optional=True, 
+                 defaultValue=False
+            )
+        )
+
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
@@ -238,23 +250,35 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         ymax=extent.yMaximum()
         extent = '%s %s, %s %s, %s %s, %s %s, %s %s' %(xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
 
-        # Connect to an INSPIRE Cadaster
-        parcels_sql = "SELECT * FROM CadastralParcel where ST_Intersects(geometry, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))"
-        parc_layer = wfs_layer(self, 'Parcele', 'cp:CadastralParcel', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-ins-wfs/cp/ows', parcels_sql)
+
+
+        if parameters['use_zkp']:
+            # Connect to an INSPIRE Cadaster
+            parcels_sql = "SELECT * FROM CadastralParcel where ST_Intersects(geometry, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))"
+            parc_layer = wfs_layer(self, 'Parcele', 'cp:CadastralParcel', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-ins-wfs/cp/ows', parcels_sql)
+            
         
-      
-        ko_sql = "SELECT * FROM KO_G where ST_Intersects(KO_G.GEOMETRY, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))" 
-        ko_layer = wfs_layer(self, 'Ko', 'SI.GURS.ZK:KO_G', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-pub-wfs/ows', ko_sql)
-      
-        if parc_layer.isValid() and ko_layer.isValid():
-            feedback.pushInfo(self.tr('Success accessing Cadaster'))
+            ko_sql = "SELECT * FROM KO_G where ST_Intersects(KO_G.GEOMETRY, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))" 
+            ko_layer = wfs_layer(self, 'Ko', 'SI.GURS.ZK:KO_G', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-pub-wfs/ows', ko_sql)
+        
+            if parc_layer.isValid() and ko_layer.isValid():
+                feedback.pushInfo(self.tr('Success accessing Cadaster'))
+            else:
+                feedback.pushDebugInfo(self.tr("Error, can not access Cadaster"))
+        
         else:
-            feedback.pushDebugInfo(self.tr("Error, can not access Cadaster"))
+            if access():
+                parc_layer = postgis_connect(self, 'public', 'ZKN parcele', 'geom', 'fid'')
+            else:
+                feedback.reportError(self.tr('Ni povezave s CPA podatkovno bazo!'))
+
 
         feedback.setCurrentStep(4)
         if feedback.isCanceled():
             return {}
-                
+
+
+
         # Clip
         clip = processing.run('native:clip', {
                 'INPUT': parc_layer,
