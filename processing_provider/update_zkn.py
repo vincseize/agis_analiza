@@ -192,6 +192,12 @@ class UpdateZkn(QgsProcessingAlgorithm):
             context
         )
     
+        if 'ZKN' in str(source.name()):  
+            feedback.pushInfo('Pravi sloj')   
+        else:
+            raise QgsProcessingException("Napačen sloj? Vhodni sloj v imenu ne vsebuje \"ZKN\"!")
+
+
         # If source was not found, throw an exception to indicate that the algorithm
         # encountered a fatal error. The exception text can be any string, but in this
         # case we use the pre-built invalidSourceError method to return a standard
@@ -212,8 +218,8 @@ class UpdateZkn(QgsProcessingAlgorithm):
         cursor = connection.cursor()
         sql = "TRUNCATE \"Podlage\".\"ZKN parcele_gurs\" RESTART IDENTITY"
         cursor.execute(sql)
-        
-        feedback.pushInfo('Vnašam %s novih parcel.. (%s)' % (source.featureCount(),str(datetime.now().time())))
+        starttime = datetime.now()
+        feedback.pushInfo('Vnašam %s novih parcel.. (%s)' % (source.featureCount(),str(starttime.time())))
         features = source.getFeatures()
         for current, feature in enumerate(features):
             pc_mid = feature[parameters['pc_mid']]
@@ -224,11 +230,16 @@ class UpdateZkn(QgsProcessingAlgorithm):
             sys_oddtm = feature[parameters['sys']] 
             sys = sys_oddtm.toString('yyyy-MM-dd')
             geom = feature.geometry()
-            sql_insert = "INSERT INTO \"Podlage\".\"ZKN parcele_gurs\" (pc_mid, sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, %s, \'%s\', %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (pc_mid, sifko, parcela, vrstap, rang, sys, geom.asWkt())
+            sql_insert = "INSERT INTO \"Podlage\".\"ZKN parcele_gurs\" (sifko, parcela, vrstap, rang, sys_oddtm, geom) VALUES (%s, \'%s\', %s, %s, \'%s\', ST_GeomFromText(\'%s\', 3794))" % (sifko, parcela, vrstap, rang, sys, geom.asWkt())
             cursor.execute(sql_insert)
-            if current % 100000 == 0:
-                now = str(datetime.now().time())
-                feedback.pushInfo('Vnešenih %s od %s parcel (%s)' %(current, source.featureCount(), now))
+            if current % 100000 == 0 and current != 0:            
+                time_diff = datetime.now() - starttime
+                duration_s = (source.featureCount() * time_diff.total_seconds())  / current
+                estimated_dur = divmod(duration_s, 60)[0]  
+                feedback.pushDebugInfo('%s:' % str(datetime.now()))
+                feedback.pushInfo('Vnešenih %s od %s parcel. Ocenjen čas do zaključka: %s min.\n' %(current, source.featureCount(), str(estimated_dur)))
+
+            
             feedback.setProgress(int(current * total))
             if feedback.isCanceled():
                 return {}
@@ -238,5 +249,12 @@ class UpdateZkn(QgsProcessingAlgorithm):
         cursor.execute(sql_update_comment)
         connection.commit()
 
-        feedback.pushInfo('Uspešno posodobljeno, vnešenih %s parcel.' % source.featureCount())
+
+        #refresh view comment
+        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
+        cursor.execute(sql_update_view_comment)
+
+        feedback.pushInfo('View updated')
+
+        feedback.pushInfo('Uspešno posodobljeno, vnešenih %s parcel. (%s)' % (source.featureCount(), starttime.time()))
         return {}

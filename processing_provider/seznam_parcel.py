@@ -268,7 +268,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         
         else:
             if access():
-                parc_layer = postgis_connect(self, 'public', 'ZKN parcele', 'geom', 'fid'')
+                parc_layer = postgis_connect(self, 'public', 'ZKN parcele', 'geom', 'fid')
             else:
                 feedback.reportError(self.tr('Ni povezave s CPA podatkovno bazo!'))
 
