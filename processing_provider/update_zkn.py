@@ -235,7 +235,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
             if current % 100000 == 0 and current != 0:            
                 time_diff = datetime.now() - starttime
                 duration_s = (source.featureCount() * time_diff.total_seconds())  / current
-                est_dur = duration_s - time_diff
+                est_dur = datetime.timedelta(seconds=duration_s) - time_diff
                 estimated_dur = divmod(est_dur, 60)[0]  
                 feedback.pushDebugInfo('%s:' % str(datetime.now()))
                 feedback.pushInfo('Vnešenih %s od %s parcel. Ocenjen čas do zaključka: %s min.\n' %(current, source.featureCount(), str(estimated_dur)))
