@@ -246,13 +246,13 @@ class UpdateZkn(QgsProcessingAlgorithm):
                 return {}
                 
         today = date.today()
-        sql_update_comment = "COMMENT ON TABLE \"Podlage\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
+        sql_update_comment = "COMMENT ON TABLE \"Podlage\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
         cursor.execute(sql_update_comment)
         connection.commit()
 
 
         #refresh view comment
-        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
+        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
         cursor.execute(sql_update_view_comment)
 
         feedback.pushInfo('View updated')
