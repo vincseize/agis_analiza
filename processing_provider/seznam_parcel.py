@@ -106,8 +106,9 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja.
-        V primeru linij ali točk je obvezna vrednost bufferja. 
+        help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja. 
+        Vir podatka parcel je zemljiškokatasterski načrt naložen v podatkovni bazi CPA ali po izbiri zemljiškokatasterski pregled, dostopen preko spletne stritve INSPIRE.
+        V primeru linij ali točk je obvezna vrednost bufferja (polovična razdalja širine posega). 
 
         Po potrebi, se predhodno uporabi orodje "intersect" za izrez območij znotraj EŠD.
         
@@ -301,8 +302,9 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 'OUTPUT': 'memory:'
             }, context=context)['OUTPUT']
         
+ 
         feedback.pushInfo(self.tr('Cadaster cliped'))
-
+ 
         feedback.setCurrentStep(5)
         if feedback.isCanceled():
             return {}
@@ -326,6 +328,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                     'INPUT': clip,
                     'OUTPUT': "memory:"
                 }, context=context, )['OUTPUT']
+
 
 
 
@@ -425,13 +428,13 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         out_area = 0
         if str(source.geometryType()) != '2':
             for feature in buffer.getFeatures():
-                in_area = in_area + round(feature.geometry().area(), 2)
+                in_area = in_area + feature.geometry().area()
         else:
             for feature in dissol.getFeatures():
-                in_area = in_area + round(feature.geometry().area(), 2)
+                in_area = in_area + feature.geometry().area()
 
         for feature in refa.getFeatures():
-            out_area = out_area + round(feature.geometry().area(), 2)
+            out_area = out_area + feature.geometry().area()
 
         #Output summary
         area = 0
@@ -476,15 +479,22 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         if parameters['use_zkp']:
             feedback.reportError('''Pri izračunu je bil uporabljen zemljiškokatastrski prikaz, ne načrt!
             Podrobnosti o razliki so na voljo na naslovu: 
-            https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf ''')
+            https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf
+            
+             ''')
 
         else:
-            if out_area != in_area:
+            if round(out_area, 2) != round(in_area, 2):
                 feedback.reportError('''Površina rezultata (%s m2) se ne ujema z vhodnim slojem (%s m2). Verjetno ZKN na območju raziskav ni zvezen!
                 Več o viru podatka ZKN: 
-                https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf  ''' %(out_area, in_area))
+                https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf  
+                
+                ''' %(round(out_area,2), round(in_area,2)))
         
-        
+
+        if parameters['use_zkp'] is not True:
+            feedback.pushDebugInfo('Pri izračunu je bil uporabljen %s. ' % parc_layer.dataComment())
+            
         feedback.pushInfo('''
 
         *******''')

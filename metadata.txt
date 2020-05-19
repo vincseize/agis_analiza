@@ -10,7 +10,7 @@
 name=AGIS Analiza
 qgisMinimumVersion=3.0
 description=Zbirka orodij za arheologe analitike
-version=0.2
+version=0.4
 author=Matjaž Mori
 email=matjaz.mori@gmail.com
 
@@ -23,7 +23,7 @@ repository=https://github.com/matjash/AGIS-Analiza
 # Recommended items:
 
 # Uncomment the following line and add your changelog:
-# changelog=
+changelog= * Dodani orodji za posodabljanje slojev EAR in ZKN v podatkovni bazi CPA. * Posodobljeno orodje seznam parcel, zdaj je mogoče uporabiti ZKN ali ZKP ter določiti prag velikosti za izpis parcel.
 
 # Tags are comma separated with spaces allowed
 tags=python, archaeology
