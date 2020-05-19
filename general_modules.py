@@ -8,7 +8,9 @@ from qgis.core import (QgsProject,
                        QgsProcessingMultiStepFeedback
                        )
 import psycopg2
+import base64
 
+u = base64.b64decode('Y3Bh')
 def path(item):
     path = {}
     plugin_dir = os.path.dirname(__file__)
@@ -19,6 +21,18 @@ def path(item):
 
     path = path[item]
     return path
+
+def pg_connect(self, user, password):
+    connection = psycopg2.connect(
+        host="majadb",
+        port="5432", 
+        database="CPA_Analiza", 
+        user=user, 
+        password=password, 
+        connect_timeout=1 
+    )     
+    return connection
+
 
 def wfs_layer(self, name, typename, crs, url, sql):
     uri = QgsDataSourceUri()
@@ -33,30 +47,12 @@ def wfs_layer(self, name, typename, crs, url, sql):
     wfs_layer = QgsVectorLayer(uri.uri(), name, 'WFS')
     return wfs_layer
 
-def postgres():
-    uri = QgsDataSourceUri()
-    host = "majadb"
-    database = "CPA_Analiza"
-    user = "cpa"
-    password = "cpa"
-    port = '5432'
-    uri.setConnection(host, port, database, user, password)
-    return uri
-
-def postgres_layer():
-    uri = postgres()
-    uri.setDataSource('public', 'Parcele', 'geom',"", "id")
-    parcele = QgsVectorLayer(uri.uri(), "parcele", "postgres")
-    return parcele
-
-
-
 # Checks if connected to CPA, ZVKDS network
 def access(self):
     self.host = "majadb"
     self.database = "CPA_Analiza"
-    self.user = "cpa"
-    self.password = "cpa"
+    self.user = u.decode('utf')
+    self.password = u.decode('utf')
     self.port = "5432"
     try:
         conn = psycopg2.connect(host=self.host,port=self.port, database=self.database, user=self.user, password=self.password, connect_timeout=1 )
@@ -64,7 +60,7 @@ def access(self):
         return True
     except:
         return False
- 
+
 # Get layer from CPA, ZVKDS database
 def postgis_connect(self, shema, tablename, geometry, id):
     uri = QgsDataSourceUri()
@@ -73,3 +69,4 @@ def postgis_connect(self, shema, tablename, geometry, id):
     uri.setKeyColumn(id)
     vlayer=QgsVectorLayer (uri .uri(False), tablename, "postgres")
     return vlayer
+        

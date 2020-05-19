@@ -29,15 +29,17 @@ from qgis.core import (Qgis,
                        QgsProcessingUtils,
                        QgsProcessingParameterNumber,
                        QgsCoordinateReferenceSystem,
-                       QgsVectorLayerJoinInfo
-                     
-                    
+                       QgsVectorLayerJoinInfo,
+                       QgsProcessingParameterBoolean
+                                         
                        )
 import processing
 import psycopg2
 from pathlib import Path
 from ..general_modules import (path,
-                               wfs_layer
+                               wfs_layer,
+                               access,
+                               postgis_connect
                         )
 
 
@@ -54,7 +56,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
     INPUT = 'INPUT'
     OUTPUT = 'OUTPUT'
     BUFFER_INPUT = 'BUFFER_INPUT'
-
+    THRES_INPUT = 'THRES_INPUT'
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -104,8 +106,9 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja.
-        V primeru linij ali točk je obvezna vrednost bufferja. 
+        help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja. 
+        Vir podatka parcel je zemljiškokatasterski načrt naložen v podatkovni bazi CPA ali po izbiri zemljiškokatasterski pregled, dostopen preko spletne stritve INSPIRE.
+        V primeru linij ali točk je obvezna vrednost bufferja (polovična razdalja širine posega). 
 
         Po potrebi, se predhodno uporabi orodje "intersect" za izrez območij znotraj EŠD.
         
@@ -122,6 +125,16 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
 
         # We add the input vector features source. It can have any kind of
         # geometry.
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                'use_zkp', 
+                'Uporabi zemljiškokatastrski pregled namesto načrta (Meje ZK so lahko nepravilne!).',
+                 optional=True, 
+                 defaultValue=False
+            )
+        )
+
         self.addParameter(
             QgsProcessingParameterFeatureSource(
                 self.INPUT,
@@ -136,9 +149,20 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 self.tr('Buffer'),
                 True,
                 [QgsProcessingParameterNumber.Double],
-                0
+                2
                 )
             )
+
+        self.addParameter(
+            QgsProcessingParameterNumber(  
+                self.THRES_INPUT,
+                self.tr('Prag velikosti za izključitev parcel iz izpisa (m2)'),
+                optional = False,
+                type=QgsProcessingParameterNumber.Double, 
+                defaultValue=0.5
+                )
+            )
+
 
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
@@ -238,23 +262,39 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         ymax=extent.yMaximum()
         extent = '%s %s, %s %s, %s %s, %s %s, %s %s' %(xmin, ymin, xmax, ymin, xmax, ymax, xmin, ymax, xmin, ymin)
 
-        # Connect to an INSPIRE Cadaster
-        parcels_sql = "SELECT * FROM CadastralParcel where ST_Intersects(geometry, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))"
-        parc_layer = wfs_layer(self, 'Parcele', 'cp:CadastralParcel', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-ins-wfs/cp/ows', parcels_sql)
+
+
+        if parameters['use_zkp']:
+            # Connect to an INSPIRE Cadaster
+            parcels_sql = "SELECT * FROM CadastralParcel where ST_Intersects(geometry, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))"
+            parc_layer = wfs_layer(self, 'Parcele', 'cp:CadastralParcel', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-ins-wfs/cp/ows', parcels_sql)
         
-      
+        else:
+            # Connect to database Cadaster
+            if access(self):
+                parc_layer = postgis_connect(self, 'public', 'ZKN parcele', 'geom', 'fid')
+            else:
+                feedback.reportError(self.tr('Ni povezave s CPA podatkovno bazo!'))
+
+
         ko_sql = "SELECT * FROM KO_G where ST_Intersects(KO_G.GEOMETRY, ST_GeometryFromText(\'POLYGON(("   +  extent  +  "))\', 3794))" 
         ko_layer = wfs_layer(self, 'Ko', 'SI.GURS.ZK:KO_G', 'EPSG:3794', 'https://storitve.eprostor.gov.si/ows-pub-wfs/ows', ko_sql)
-      
+
+       
         if parc_layer.isValid() and ko_layer.isValid():
             feedback.pushInfo(self.tr('Success accessing Cadaster'))
+        elif parc_layer.isValid() and not ko_layer.isValid():
+            feedback.pushDebugInfo(self.tr("Error, can not access K. O. layer: https://storitve.eprostor.gov.si/ows-pub-wfs/ows"))
+        elif not parc_layer.isValid() and ko_layer.isValid():
+            feedback.pushDebugInfo(self.tr("Error, can not access Parcels"))
         else:
             feedback.pushDebugInfo(self.tr("Error, can not access Cadaster"))
 
         feedback.setCurrentStep(4)
         if feedback.isCanceled():
             return {}
-                
+
+
         # Clip
         clip = processing.run('native:clip', {
                 'INPUT': parc_layer,
@@ -262,20 +302,34 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                 'OUTPUT': 'memory:'
             }, context=context)['OUTPUT']
         
+ 
         feedback.pushInfo(self.tr('Cadaster cliped'))
-
+ 
         feedback.setCurrentStep(5)
         if feedback.isCanceled():
             return {}
 
         #Join cadastral names
-        clip = processing.run('qgis:refactorfields', {
-                'FIELDS_MAPPING': [
-                    {'expression': "regexp_substr(nationalCadastralReference,'(\\\\d+)')", 'length': 0, 'name': 'SIFKO', 'precision': 0, 'type': 2},
-                    {'expression': '"label"', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10}], 
-                'INPUT': clip,
-                'OUTPUT': "memory:"
-            }, context=context, )['OUTPUT']
+        if parameters['use_zkp']:
+            clip = processing.run('qgis:refactorfields', {
+                    'FIELDS_MAPPING': [
+                        {'expression': "regexp_substr(nationalCadastralReference,'(\\\\d+)')", 'length': 0, 'name': 'SIFKO', 'precision': 0, 'type': 2},
+                        {'expression': '"label"', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10}], 
+                    'INPUT': clip,
+                    'OUTPUT': "memory:"
+                }, context=context, )['OUTPUT']
+
+        else:
+            clip = processing.run('qgis:refactorfields', {
+                    'FIELDS_MAPPING': [
+                        {'expression': "sifko", 'length': 0, 'name': 'SIFKO', 'precision': 0, 'type': 2},
+                        {'expression': 'parcela', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10},
+                        {'expression': '"Vrsta parcele"', 'length': 0, 'name': 'Vrsta parcele', 'precision': 0, 'type': 10},], 
+                    'INPUT': clip,
+                    'OUTPUT': "memory:"
+                }, context=context, )['OUTPUT']
+
+
 
 
         ko = processing.run('qgis:refactorfields', {
@@ -303,7 +357,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         if feedback.isCanceled():
             return {}
 
-
+        
         # Refactor fields
         refa = processing.run('qgis:refactorfields', {
                 'FIELDS_MAPPING': [
@@ -311,12 +365,12 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
                     {'expression': '"sifko"', 'length': 0, 'name': 'sifko', 'precision': 0, 'type': 2},
                     {'expression': '"parcela"', 'length': 0, 'name': 'parcela', 'precision': 0, 'type': 10}, 
                     {'expression':  '"output_IMEKO"', 'length': 20, 'name': 'IMEKO', 'precision': 0, 'type': 10},
-                    {'expression': '"Parcela in KO"', 'length': 0, 'name': 'Parcela in KO', 'precision': 0, 'type': 10},
                     {'expression': 'round($area,2)', 'length': 0, 'name': 'površina na trasi', 'precision': 0, 'type': 6},
                     {'expression': '"Lastnik"', 'length': 0, 'name': 'Lastnik', 'precision': 0, 'type': 10},
                     {'expression': '"Naslov"', 'length': 0, 'name': 'Naslov', 'precision': 0, 'type': 10},
                     {'expression': '"Dovoljenje"', 'length': 0, 'name': 'Dovoljenje', 'precision': 0, 'type': 10},
                     {'expression': '"Kontakt"', 'length': 0, 'name': 'Kontakt', 'precision': 0, 'type': 10},
+                    {'expression': '"Vrsta parcele"', 'length': 0, 'name': 'Vrsta parcele', 'precision': 0, 'type': 10},
                     {'expression': '"Opombe"', 'length': 0, 'name': 'Opombe', 'precision': 0, 'type': 10}],
                 'INPUT': clip,
                 'OUTPUT': "memory:"
@@ -368,6 +422,20 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # dictionary, with keys matching the feature corresponding parameter
         # or output names.
 
+
+        #Check size matching
+        in_area = 0
+        out_area = 0
+        if str(source.geometryType()) != '2':
+            for feature in buffer.getFeatures():
+                in_area = in_area + feature.geometry().area()
+        else:
+            for feature in dissol.getFeatures():
+                in_area = in_area + feature.geometry().area()
+
+        for feature in refa.getFeatures():
+            out_area = out_area + feature.geometry().area()
+
         #Output summary
         area = 0
         cnt = 0
@@ -388,7 +456,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         idx = refa.fields().indexOf('sifko')
         values = refa.uniqueValues(idx)
         #Set treshold to not include parcel 
-        prag = 0.5
+        prag = parameters[self.THRES_INPUT]
 
         for val in values:
             parc_ls = []
@@ -406,8 +474,30 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         
         feedback.pushInfo('''
         Pri tem izpisu niso upoštevane parcele s površino manjšo od %s m2!!!
+        ''' % prag)
 
-        *******''' % prag)
+        if parameters['use_zkp']:
+            feedback.reportError('''Pri izračunu je bil uporabljen zemljiškokatastrski prikaz, ne načrt!
+            Podrobnosti o razliki so na voljo na naslovu: 
+            https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf
+            
+             ''')
+
+        else:
+            if round(out_area, 2) != round(in_area, 2):
+                feedback.reportError('''Površina rezultata (%s m2) se ne ujema z vhodnim slojem (%s m2). Verjetno ZKN na območju raziskav ni zvezen!
+                Več o viru podatka ZKN: 
+                https://www.e-prostor.gov.si/fileadmin/struktura/Opis_strukture_graficnih_podatkov_ZK.pdf  
+                
+                ''' %(round(out_area,2), round(in_area,2)))
+        
+
+        if parameters['use_zkp'] is not True:
+            feedback.pushDebugInfo('Pri izračunu je bil uporabljen %s. ' % parc_layer.dataComment())
+            
+        feedback.pushInfo('''
+
+        *******''')
 
         self.dest_id=dest_id
         return {self.OUTPUT: dest_id}
