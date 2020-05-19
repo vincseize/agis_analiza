@@ -106,7 +106,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
         """
         help_text = """To orodje sprejme ZKN ter ga posodobi v podatkovni bazi. Sveži podatki se pridobijo na https://egp.gu.gov.si/egp/.
 
-        Posodabljanje traja okoli 2.5 h vendar močno ne obremeni sistema. 
+        Posodabljanje traja okoli 145 min, močno ne obremeni sistema vendar začasno onemogoči uporabo sloja drugim uporabnikom! 
 
         Vse spremembe so potrjene po uspešnem postopku, ob vmesni prekinitvi se sloj vrne v prvotno stanje. 
         
@@ -246,13 +246,13 @@ class UpdateZkn(QgsProcessingAlgorithm):
                 return {}
                 
         today = date.today()
-        sql_update_comment = "COMMENT ON TABLE \"Podlage\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
+        sql_update_comment = "COMMENT ON TABLE \"Podlage\".\"ZKN parcele_gurs\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
         cursor.execute(sql_update_comment)
         connection.commit()
 
 
         #refresh view comment
-        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/dd. Datum zadnje posodobitve: %s.\'" % date.today()
+        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
         cursor.execute(sql_update_view_comment)
 
         feedback.pushInfo('View updated')
