@@ -250,10 +250,14 @@ class UpdateZkn(QgsProcessingAlgorithm):
         cursor.execute(sql_update_comment)
         connection.commit()
 
+        #refresh view 
+        refresh_view = "REFRESH MATERIALIZED VIEW CONCURRENTLY public.\"ZKN parcele\";"
+        cursor.execute(refresh_view)
+        feedback.pushInfo('Materialized view updated')
 
-        #refresh view comment
-        sql_update_view_comment = "COMMENT ON VIEW \"public\".\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
-        cursor.execute(sql_update_view_comment)
+        sql_update_comment_view = "COMMENT ON MATERIALIZED VIEW public.\"ZKN parcele\" IS \'Zemljiško katasterski načrt, parcele. Vir podatka: https://egp.gu.gov.si/egp/. Datum zadnje posodobitve: %s.\'" % date.today()
+        cursor.execute(sql_update_comment_view)
+        connection.commit()
 
         feedback.pushInfo('View updated')
 
