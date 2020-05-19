@@ -107,7 +107,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         parameters and outputs associated with it..
         """
         help_text = """To orodje sprejme območje raziskave ter pripravi nov začasni sloj, ki vsebuje vse parcele znotraj območja. 
-        Vir podatka parcel je zemljiškokatasterski načrt naložen v podatkovni bazi CPA ali po izbiri zemljiškokatasterski pregled, dostopen preko spletne stritve INSPIRE.
+        Vir podatka parcel je zemljiškokatasterski načrt naložen v podatkovni bazi CPA ali po izbiri zemljiškokatasterski prikaz, dostopen preko spletne stritve INSPIRE.
         V primeru linij ali točk je obvezna vrednost bufferja (polovična razdalja širine posega). 
 
         Po potrebi, se predhodno uporabi orodje "intersect" za izrez območij znotraj EŠD.
@@ -129,7 +129,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterBoolean(
                 'use_zkp', 
-                'Uporabi zemljiškokatastrski pregled namesto načrta (Meje ZK so lahko nepravilne!).',
+                'Uporabi zemljiškokatastrski prikaz namesto načrta (Meje ZK so lahko nepravilne!).',
                  optional=True, 
                  defaultValue=False
             )
