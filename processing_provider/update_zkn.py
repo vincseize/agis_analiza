@@ -106,9 +106,11 @@ class UpdateZkn(QgsProcessingAlgorithm):
         """
         help_text = """To orodje sprejme ZKN ter ga posodobi v podatkovni bazi. Sveži podatki se pridobijo na https://egp.gu.gov.si/egp/.
 
-        Posodabljanje traja okoli 145 min, močno ne obremeni sistema vendar začasno onemogoči uporabo sloja drugim uporabnikom! 
+        Posodabljanje traja okoli 145 min a ne obremeni sistema. Med procesom lahko za krajši čas onemogoči uporabo sloja ZKN parcele drugim uporabnikom! 
 
         Vse spremembe so potrjene po uspešnem postopku, ob vmesni prekinitvi se sloj vrne v prvotno stanje. 
+        
+        Za uporabo so potrebne administratorske pravice!
         
         """
         return self.tr(help_text)
