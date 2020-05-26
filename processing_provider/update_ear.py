@@ -107,6 +107,8 @@ class UpdateEar(QgsProcessingAlgorithm):
 
         Vse spremembe so potrjene po uspešnem postopku, ob vmesni prekinitvi se sloj vrne v prvotno stanje. 
         
+        Za uporabo so potrebne administratorske pravice!
+        
         """
         return self.tr(help_text)
 
