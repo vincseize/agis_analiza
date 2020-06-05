@@ -30,7 +30,8 @@ from qgis.core import (Qgis,
                        QgsProcessingParameterNumber,
                        QgsCoordinateReferenceSystem,
                        QgsVectorLayerJoinInfo,
-                       QgsProcessingParameterBoolean
+                       QgsProcessingParameterBoolean,
+                       QgsFeatureSource
                                          
                        )
 import processing
@@ -57,6 +58,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
     OUTPUT = 'OUTPUT'
     BUFFER_INPUT = 'BUFFER_INPUT'
     THRES_INPUT = 'THRES_INPUT'
+
     def tr(self, string):
         """
         Returns a translatable string with the self.tr() function.
@@ -137,9 +139,9 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFeatureSource(
-                self.INPUT,
+                'obmocje',
                 self.tr('Obmocje raziskave'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+                types=[QgsProcessing.TypeVectorAnyGeometry]
                 )
             )
 
@@ -183,32 +185,31 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsVectorLayer(
+        source = self.parameterAsSource(
             parameters,
-            self.INPUT,
+            'obmocje',
             context
         )
         buffer_value = parameters[self.BUFFER_INPUT]
-    
-
-
+        
         # If source was not found, throw an exception to indicate that the algorithm
         # encountered a fatal error. The exception text can be any string, but in this
         # case we use the pre-built invalidSourceError method to return a standard
         # helper text for when a source cannot be evaluated
         if source is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
-   
-        if str(source.geometryType()) != '2' and buffer_value == 0.0:
-            raise QgsProcessingException("Buffer value should not be 0 when not using polygon layers!")
-
-
+               
         # Fix geometry
         fix_geom = processing.run("native:fixgeometries", {
-                'INPUT': source,
+                'INPUT': parameters['obmocje'],
                 'OUTPUT': 'memory:'
             }, context=context)['OUTPUT']
         
+        if str(fix_geom.geometryType()) != '2' and buffer_value == 0.0:
+            raise QgsProcessingException("Buffer value should not be 0 when not using polygon layers!")
+              
+
+
         feedback.pushInfo(self.tr('Geometry fixed.'))
         feedback.setCurrentStep(1)
         if feedback.isCanceled():
@@ -227,8 +228,8 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
             return {}
 
         #Apply buffer and Reproject layer
-     
-        if str(source.geometryType()) == '0':
+
+        if str(fix_geom.geometryType()) == '0':
             cap_style = 2
         else:
             cap_style = 1
@@ -426,7 +427,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         #Check size matching
         in_area = 0
         out_area = 0
-        if str(source.geometryType()) != '2':
+        if str(fix_geom.geometryType()) != '2':
             for feature in buffer.getFeatures():
                 in_area = in_area + feature.geometry().area()
         else:
