@@ -7,6 +7,7 @@ import os
 from .update_ear import UpdateEar
 from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
+from .download_lidar import DownloadLidar
 from pathlib import Path
 from ..general_modules import (path             
                         )
@@ -21,6 +22,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(UpdateEar())
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
         self.addAlgorithm(UpdateZkn())
+        self.addAlgorithm(DownloadLidar())
 
 
     def id(self):
