@@ -8,6 +8,7 @@ from .update_ear import UpdateEar
 from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from .download_lidar import DownloadLidar
+from .load_presets import LoadPreset
 from pathlib import Path
 from ..general_modules import (path             
                         )
@@ -18,7 +19,7 @@ class Provider(QgsProcessingProvider):
         QgsProcessingProvider.__init__(self)
 
     def loadAlgorithms(self, *args, **kwargs):
-        #self.addAlgorithm(Files2Table())
+        self.addAlgorithm(LoadPreset())
         self.addAlgorithm(UpdateEar())
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
         self.addAlgorithm(UpdateZkn())
