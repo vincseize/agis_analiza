@@ -9,6 +9,7 @@ from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from .download_lidar import DownloadLidar
 from .load_presets import LoadPreset
+from .dopisi_lastniki import DopisiLastnikom
 from pathlib import Path
 from ..general_modules import (path             
                         )
@@ -19,11 +20,12 @@ class Provider(QgsProcessingProvider):
         QgsProcessingProvider.__init__(self)
 
     def loadAlgorithms(self, *args, **kwargs):
-        self.addAlgorithm(LoadPreset())
+        #self.addAlgorithm(LoadPreset())
         self.addAlgorithm(UpdateEar())
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
         self.addAlgorithm(UpdateZkn())
         self.addAlgorithm(DownloadLidar())
+        self.addAlgorithm(DopisiLastnikom())
 
 
     def id(self):
@@ -35,7 +37,7 @@ class Provider(QgsProcessingProvider):
         This string should be as short as possible (e.g. "Lastools", not
         "Lastools version 1.0.1 64-bit") and localised.
         """
-        return self.tr('AGIS analiza v 0.5')
+        return self.tr('AGIS analiza v 0.6')
 
     def icon(self):
         """Should return a QIcon which is used for your provider inside

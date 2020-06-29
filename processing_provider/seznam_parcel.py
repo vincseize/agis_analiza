@@ -90,7 +90,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         Returns the name of the group this algorithm belongs to. This string
         should be localised.
         """
-        return self.tr('')
+        return self.tr('Priprava projektov')
 
     def groupId(self):
         """
@@ -100,7 +100,7 @@ class SeznamParcelZnotrajObmojaRaziskave(QgsProcessingAlgorithm):
         contain lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return ''
+        return 'priprava_projektov'
 
     def shortHelpString(self):
         """
