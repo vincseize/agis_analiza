@@ -10,6 +10,7 @@ from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from .download_lidar import DownloadLidar
 from .load_presets import LoadPreset
 from .dopisi_lastniki import DopisiLastnikom
+from .gf_prepare_profiles_topo import GfPrepareProfilesTopo
 from pathlib import Path
 from ..general_modules import (path             
                         )
@@ -26,7 +27,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(UpdateZkn())
         self.addAlgorithm(DownloadLidar())
         self.addAlgorithm(DopisiLastnikom())
-
+        self.addAlgorithm(GfPrepareProfilesTopo())
 
     def id(self):
         return 'agis_analiza'
