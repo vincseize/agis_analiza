@@ -209,9 +209,11 @@ class ProcessLidar(QgsProcessingAlgorithm):
                             num = re.findall('[\d]*[.][\d]+', text)        
                             sum_total = sum_total + float(num[0])
                             sum_last = sum_last + float(num[1])      
-            if list_nr > 0:                                 
-                feedback.pushInfo('Povprečna gostota vseh odbojev: %s' % round(sum_total/list_nr), 3)
-                feedback.pushInfo('Povprečna gostota talnih odbojev: %s' % round(sum_last/list_nr),3)
+            if list_nr > 0:                          
+                avg_all = round(sum_total/list_nr, 3)
+                avg_last = round(sum_last/list_nr, 3)
+                feedback.pushInfo('Povprečna gostota vseh odbojev: %s' % avg_all)
+                feedback.pushInfo('Povprečna gostota zadnjih odbojev: %s' % avg_last)
             else:
                 feedback.pushInfo('Ni info?!')
             shutil.rmtree(info)
