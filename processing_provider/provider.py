@@ -8,6 +8,7 @@ from .update_ear import UpdateEar
 from .update_zkn import UpdateZkn
 from .seznam_parcel import SeznamParcelZnotrajObmojaRaziskave
 from .download_lidar import DownloadLidar
+from .lidar_processing import ProcessLidar
 from .load_presets import LoadPreset
 from .dopisi_lastniki import DopisiLastnikom
 from .gf_prepare_profiles_topo import GfPrepareProfilesTopo
@@ -26,6 +27,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(SeznamParcelZnotrajObmojaRaziskave())
         self.addAlgorithm(UpdateZkn())
         self.addAlgorithm(DownloadLidar())
+        self.addAlgorithm(ProcessLidar())
         self.addAlgorithm(DopisiLastnikom())
         self.addAlgorithm(GfPrepareProfilesTopo())
 
