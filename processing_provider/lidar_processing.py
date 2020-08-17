@@ -119,8 +119,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 'infolder', 
                 'Mapa z .laz datotekami',
                  behavior=QgsProcessingParameterFile.Folder, 
-                 fileFilter='All files (*.*)', 
-                 defaultValue='E:\\DPNJI\\Hrastnik\\test1'
+                 fileFilter='All files (*.*)'
                  )
             )
 
@@ -154,8 +153,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 'outdem', 
                 'Mapa za DMV', 
                 behavior=QgsProcessingParameterFile.Folder, 
-                fileFilter='All files (*.*)', 
-                defaultValue='E:\\DPNJI\\out'
+                fileFilter='All files (*.*)'
                 )
             )
        
@@ -215,7 +213,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 feedback.pushInfo('Povprečna gostota vseh odbojev: %s' % avg_all)
                 feedback.pushInfo('Povprečna gostota zadnjih odbojev: %s' % avg_last)
             else:
-                feedback.pushInfo('Ni info?!')
+                feedback.pushInfo('Težave s potjo?: %s' % laz_path)
             shutil.rmtree(info)
         
         
