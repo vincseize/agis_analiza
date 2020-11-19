@@ -22,10 +22,14 @@ from qgis.core import (QgsProject,
                        QgsProcessingMultiStepFeedback,
                        QgsRasterLayer,                     
                        QgsProcessingParameterString,
-                       QgsProcessingParameterNumber
+                       QgsProcessingParameterNumber,
+                       QgsProcessingParameterBoolean,
+                       QgsProcessingUtils
+
                        )
 from qgis import processing
 from pathlib import Path
+from ..general_modules import path
 import tempfile
 import subprocess
 import shutil
@@ -149,6 +153,19 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 'dem_resolution', 
                 'Ločljivost DMV', type=QgsProcessingParameterNumber.Double, defaultValue=0.5))
 
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                'density_resolution', 
+                'Ločljivost karte gostote talnih točk', type=QgsProcessingParameterNumber.Double, defaultValue=5))
+
+        self.addParameter(
+            QgsProcessingParameterBoolean(
+                'merge_grids', 
+                'Združi liste v en raster',
+                 optional=True, 
+                 defaultValue=True
+            )
+        )
 
         self.addParameter(
             QgsProcessingParameterFile(
@@ -180,6 +197,9 @@ class ProcessLidar(QgsProcessingAlgorithm):
         dem_resolution = parameters['dem_resolution'] 
         proc_parameters = parameters['proc_parameters'] 
         tile_params = parameters['tile_params'] 
+        density_resolution = parameters['density_resolution']
+        merge_grids= ['merge_grids']
+
 
         lastile = 'C:\\LAStools\\bin\\lastile.exe'
         lasground = 'C:\\LAStools\\bin\\lasground_new.exe'
@@ -230,12 +250,13 @@ class ProcessLidar(QgsProcessingAlgorithm):
             shutil.rmtree(info)
             return [avg_all, avg_last]
         
-        
+        density = tempfile.mkdtemp() 
+        tmp_dem = tempfile.mkdtemp() 
         for cur, laz_file in enumerate(pathlist):  
             cur = cur + 1
             tiles = tempfile.mkdtemp()
             classified = tempfile.mkdtemp()
-            grid = tempfile.mkdtemp()   
+            grid = tempfile.mkdtemp()  
             name = Path(laz_file).stem
             feedback.pushInfo(self.tr('Začenjam list %s/%s: %s.' % (cur, count, name)))
             subprocess.run('%s -i %s -o "tile.las" %s -flag_as_withheld -reversible -extra_pass -olas -odir %s' %(lastile, laz_file, tile_params, tiles))
@@ -244,10 +265,14 @@ class ProcessLidar(QgsProcessingAlgorithm):
             avgs =las_info(name, classified,'')
             avg_ground =las_info(name, classified,'-keep_classification 2')          
             #feedback.pushInfo(self.tr('Začenjam list las2dem'))
-            subprocess.run('%s -i *.las -cores 16 -step %s -use_tile_bb -odir %s -obil -keep_class 2 -extra_pass' %(las2dem, dem_resolution, grid), cwd=classified)
-            #feedback.pushInfo(self.tr('Uspešno'))
+            subprocess.run('%s -i *.las -cores 16 -step %s -use_tile_bb -odir %s -obil -keep_class 2 -extra_pass' %(las2dem, dem_resolution, grid), cwd=classified)         
+            subprocess.run('%s -i *.las -keep_classification 2 -step %s -point_density  -odir %s  -o -%s.asc' %(lasgrid, density_resolution, density, name), cwd=classified)                                                          
             shutil.rmtree(classified)
-            out_tif = Path(outdem)/ (name + '.tif')
+            if merge_grids:            
+                out_tif = Path(tmp_dem)/ (name + '.tif')
+             
+            else:
+                out_tif = Path(outdem)/ (name + '.tif')
             #feedback.pushInfo(self.tr('Začenjam list lasgrid'))
             subprocess.run('%s -i *.bil -cores 16 -o %s -step %s -merged' %(lasgrid, str(out_tif), dem_resolution), cwd=grid)
             #feedback.pushInfo(self.tr('Uspešno'))
@@ -256,11 +281,51 @@ class ProcessLidar(QgsProcessingAlgorithm):
             sum_total_all += avgs[0]
             sum_last_all += avgs[1]
             sum_ground +=avg_ground[0]
-            
-        all = sum_total_all/count
+
+        merge_input = []
+        for asc_file in Path(density).glob('*asc'):
+            merge_input.append(str(asc_file))
+        
+        density_map = str(outdem) + '\\density map.tif'
+       
+        processing.run("gdal:merge", {
+            'INPUT':merge_input,
+            'PCT':False,
+            'SEPARATE':False,
+            'NODATA_INPUT':None,
+            'NODATA_OUTPUT':None,
+            'OPTIONS':'',
+            'EXTRA':'',
+            'DATA_TYPE':5,
+            'OUTPUT': density_map
+            }
+            )    
+
+        if merge_grids:
+            merged_map = str(outdem) + '\\DMV '+ str(dem_resolution) + ' m.tif'
+            merge_dems = []
+            for tif_file in Path(tmp_dem).glob('*tif'):
+                merge_dems.append(str(tif_file))
+            processing.run("gdal:merge", {
+            'INPUT':merge_dems,
+            'PCT':False,
+            'SEPARATE':False,
+            'NODATA_INPUT':None,
+            'NODATA_OUTPUT':None,
+            'OPTIONS':'',
+            'EXTRA':'',
+            'DATA_TYPE':5,
+            'OUTPUT': merged_map
+            }
+            ) 
+
+        shutil.rmtree(density)
+        shutil.rmtree(tmp_dem)
+
+        all_ = sum_total_all/count
         last = sum_last_all/count
         ground = sum_ground/count
-        txt_all = 'Povprečna gostota vseh odbojev: %s' % all
+        txt_all = 'Povprečna gostota vseh odbojev: %s' % all_
         txt_last = 'Povprečna gostota zadnjih odbojev: %s' % last
         txt_ground = 'Povprečna gostota talnih točk: %s' % ground
         
@@ -285,7 +350,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
             for i in list_ground_points:
                 f.write(i)  
                 f.write('\n')          
-         
+   
         return {}
 
 
