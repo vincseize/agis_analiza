@@ -269,7 +269,8 @@ class ProcessLidar(QgsProcessingAlgorithm):
         feedback.pushInfo(txt_ground)
         
         log_file = Path(outdem )/'lidar_process_log.txt'
-        with open(str(log_file), 'w') as f:  
+        with open(str(log_file), 'a') as f:  
+            f.write('\n') 
             f.write(str(datetime.datetime.now()))        
             f.write('\n') 
             f.write('Procesiranih je bilo %s listov.' % count)   
