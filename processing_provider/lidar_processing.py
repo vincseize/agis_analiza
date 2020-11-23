@@ -38,6 +38,7 @@ import os
 import datetime
 
 
+
 class ProcessLidar(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
@@ -206,6 +207,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
         las2dem = 'C:\\LAStools\\bin\\las2dem.exe'
         lasgrid = 'C:\\LAStools\\bin\\lasgrid.exe'
         lasinfo = 'C:\\LAStools\\bin\\lasinfo.exe'
+        lasindex = 'C:\\LAStools\\bin\\lasindex.exe'
          
         sum_total_all = 0
         sum_last_all = 0
@@ -257,17 +259,41 @@ class ProcessLidar(QgsProcessingAlgorithm):
             tiles = tempfile.mkdtemp()
             classified = tempfile.mkdtemp()
             grid = tempfile.mkdtemp()  
+            list_density = tempfile.mkdtemp() 
             name = Path(laz_file).stem
             feedback.pushInfo(self.tr('Začenjam list %s/%s: %s.' % (cur, count, name)))
-            subprocess.run('%s -i %s -o "tile.las" %s -flag_as_withheld -reversible -extra_pass -olas -odir %s' %(lastile, laz_file, tile_params, tiles))
+            subprocess.run('%s -i %s -append' %(lasindex, laz_file,))                                                         
+            subprocess.run('%s -i %s -o "tile.las" %s -reversible -olas -odir %s' %(lastile, laz_file, tile_params, tiles))
             subprocess.run('%s -i *.las -cores 16 %s -odir %s' %(lasground, proc_parameters, classified), cwd=tiles)
             shutil.rmtree(tiles)
             avgs =las_info(name, classified,'')
             avg_ground =las_info(name, classified,'-keep_classification 2')          
-            #feedback.pushInfo(self.tr('Začenjam list las2dem'))
+       
             subprocess.run('%s -i *.las -cores 16 -step %s -use_tile_bb -odir %s -obil -keep_class 2 -extra_pass' %(las2dem, dem_resolution, grid), cwd=classified)         
-            subprocess.run('%s -i *.las -keep_classification 2 -step %s -point_density  -odir %s  -o -%s.asc' %(lasgrid, density_resolution, density, name), cwd=classified)                                                          
+            subprocess.run('%s -i *.las -keep_classification 2 -step %s  -point_density -odir %s  -o -%s.asc' %(lasgrid, density_resolution, list_density, name), cwd=classified)                                                                        
             shutil.rmtree(classified)
+                   
+            list_input = []
+            for asc_file in Path(list_density).glob('*asc'):
+                list_input.append(str(asc_file))            
+            
+            density_list = str(density) +  '\\' + str(name) + 'density map.tif'     
+                   
+            processing.run("gdal:merge", {
+                'INPUT':list_input,
+                'PCT':False,
+                'SEPARATE':False,
+                'NODATA_INPUT':0,
+                'NODATA_OUTPUT':None,
+                'OPTIONS':'',
+                'EXTRA':'',
+                'DATA_TYPE':5,
+                'OUTPUT': density_list
+                }
+                )  
+               
+            shutil.rmtree(list_density)            
+         
             if merge_grids:            
                 out_tif = Path(tmp_dem)/ (name + '.tif')
              
@@ -281,26 +307,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
             sum_total_all += avgs[0]
             sum_last_all += avgs[1]
             sum_ground +=avg_ground[0]
-
-        merge_input = []
-        for asc_file in Path(density).glob('*asc'):
-            merge_input.append(str(asc_file))
-        
-        density_map = str(outdem) + '\\density map.tif'
-       
-        processing.run("gdal:merge", {
-            'INPUT':merge_input,
-            'PCT':False,
-            'SEPARATE':False,
-            'NODATA_INPUT':None,
-            'NODATA_OUTPUT':None,
-            'OPTIONS':'',
-            'EXTRA':'',
-            'DATA_TYPE':5,
-            'OUTPUT': density_map
-            }
-            )    
-
+         
         if merge_grids:
             merged_map = str(outdem) + '\\DMV '+ str(dem_resolution) + ' m.tif'
             merge_dems = []
@@ -310,7 +317,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
             'INPUT':merge_dems,
             'PCT':False,
             'SEPARATE':False,
-            'NODATA_INPUT':None,
+            'NODATA_INPUT':0,
             'NODATA_OUTPUT':None,
             'OPTIONS':'',
             'EXTRA':'',
@@ -318,9 +325,42 @@ class ProcessLidar(QgsProcessingAlgorithm):
             'OUTPUT': merged_map
             }
             ) 
+            shutil.rmtree(tmp_dem)
+
+        merge_input = []
+        for tif_file in Path(density).glob('*tif'):
+            merge_input.append(str(tif_file))
+            
+        density_map_saga = str(density) + '\\density map.sdat'
+        density_map = str(outdem) + '\\density map.tif'
+      
+      
+        dens = processing.run("saga:mosaicrasterlayers", {
+            'GRIDS':merge_input,
+            'NAME':'Mosaic',
+            'TYPE':7,
+            'RESAMPLING':0,
+            'OVERLAP':3,
+            'BLEND_DIST':1,
+            'MATCH':0,
+            'TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX':None,
+            'TARGET_USER_SIZE':density_resolution,
+            'TARGET_USER_FITS':1,
+            'TARGET_OUT_GRID':density_map_saga})
+          
+        processing.run("gdal:translate", {
+            'INPUT':density_map_saga,
+            'TARGET_CRS':None,
+            'NODATA':None,
+            'COPY_SUBDATASETS':False,
+            'OPTIONS':'',
+            'EXTRA':'',
+            'DATA_TYPE':0,
+            'OUTPUT':density_map})  
+          
 
         shutil.rmtree(density)
-        shutil.rmtree(tmp_dem)
+        
 
         all_ = sum_total_all/count
         last = sum_last_all/count
