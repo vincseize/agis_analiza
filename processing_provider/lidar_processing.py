@@ -12,7 +12,7 @@
 """
 
 from qgis.PyQt.QtCore import QCoreApplication, QFileInfo, QVariant
-
+from qgis.analysis import QgsRasterCalculatorEntry, QgsRasterCalculator
 from qgis.core import (QgsProject,
                        QgsProcessing,
                        QgsFeatureSink,
@@ -111,6 +111,8 @@ class ProcessLidar(QgsProcessingAlgorithm):
         """
         help_text = """Orodje za procesiranje lidarja z LAStools. 
         Za pravilno delovanje je potrebno imeti naložen LAStools na C:/LAStools!
+
+        Rezultat je DEM ter karta gostote talnih točk (število točk na celico).
         
         """
         return self.tr(help_text)
@@ -241,11 +243,11 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 avg_all = round(sum_total/list_nr, 3)        
                 avg_last = round(sum_last/list_nr, 3)    
                 if extraparam == '':
-                    feedback.pushInfo('Povprečna gostota vseh odbojev lista %s: %s' % (name, avg_all))
-                    feedback.pushInfo('Povprečna gostota zadnjih odbojev lista %s: %s' % (name, avg_last))
+                    feedback.pushInfo('Povprečna gostota vseh odbojev lista %s: %s /m2' % (name, avg_all))
+                    feedback.pushInfo('Povprečna gostota zadnjih odbojev lista %s: %s /m2' % (name, avg_last))
                     
                 else:
-                    feedback.pushInfo('Povprečna gostota talnih točk lista %s: %s' % (name, avg_all))    
+                    feedback.pushInfo('Povprečna gostota talnih točk lista %s: %s /m2' % (name, avg_all))    
                     list_ground_points.append('%s: %s' %(name, avg_all))    
             else:
                 feedback.pushInfo('Težave s potjo?: %s' % laz_path)
@@ -277,8 +279,11 @@ class ProcessLidar(QgsProcessingAlgorithm):
             for asc_file in Path(list_density).glob('*asc'):
                 list_input.append(str(asc_file))            
             
-            density_list = str(density) +  '\\' + str(name) + 'density map.tif'     
-                   
+            if density_resolution == density_resolution ** 2: 
+                density_list = str(density) +  '\\' + str(name) + 'density map.tif'     
+            else: 
+                density_list = str(list_density) +  '\\' + str(name) + 'density map_raw.tif'    
+
             processing.run("gdal:merge", {
                 'INPUT':list_input,
                 'PCT':False,
@@ -291,7 +296,25 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 'OUTPUT': density_list
                 }
                 )  
-               
+
+
+            if density_resolution != density_resolution ** 2:   
+                multipyer = density_resolution ** 2
+                density_list_raw = QgsRasterLayer(density_list, 'density_raster')   
+                feedback.pushInfo(self.tr(str(density_list_raw)))
+                density_list = str(density) +  '\\' + str(name) + 'density map.tif' 
+                feedback.pushInfo(self.tr(str(density_list)))
+
+                entries = []
+                ras = QgsRasterCalculatorEntry()
+                ras.ref = 'ras@1'
+                ras.raster = density_list_raw
+                ras.bandNumber = 1
+                entries.append( ras )
+                expression = '\'ras@1\' * %s * (\'ras@1\' != -9999)' %(multipyer)   
+                calc = QgsRasterCalculator( expression, density_list , 'GTiff', density_list_raw.extent(), density_list_raw.width(), density_list_raw.height(), entries )
+                calc.processCalculation()
+            density_list_raw = ''
             shutil.rmtree(list_density)            
          
             if merge_grids:            
@@ -301,7 +324,6 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 out_tif = Path(outdem)/ (name + '.tif')
             #feedback.pushInfo(self.tr('Začenjam list lasgrid'))
             subprocess.run('%s -i *.bil -cores 16 -o %s -step %s -merged' %(lasgrid, str(out_tif), dem_resolution), cwd=grid)
-            #feedback.pushInfo(self.tr('Uspešno'))
             feedback.setProgress(cur * total)
             shutil.rmtree(grid)
             sum_total_all += avgs[0]
@@ -334,40 +356,44 @@ class ProcessLidar(QgsProcessingAlgorithm):
         density_map_saga = str(density) + '\\density map.sdat'
         density_map = str(outdem) + '\\density map.tif'
       
-      
-        dens = processing.run("saga:mosaicrasterlayers", {
-            'GRIDS':merge_input,
-            'NAME':'Mosaic',
-            'TYPE':7,
-            'RESAMPLING':0,
-            'OVERLAP':3,
-            'BLEND_DIST':1,
-            'MATCH':0,
-            'TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX':None,
-            'TARGET_USER_SIZE':density_resolution,
-            'TARGET_USER_FITS':1,
-            'TARGET_OUT_GRID':density_map_saga})
+        if len(merge_input) > 1:
+            dens = processing.run("saga:mosaicrasterlayers", {
+                'GRIDS':merge_input,
+				'NAME':'Mosaic',
+				'TYPE':7,
+				'RESAMPLING':0,
+				'OVERLAP':3,
+				'BLEND_DIST':1,
+				'MATCH':0,
+				'TARGET_USER_XMIN TARGET_USER_XMAX TARGET_USER_YMIN TARGET_USER_YMAX':None,
+				'TARGET_USER_SIZE':density_resolution,
+				'TARGET_USER_FITS':1,
+				'TARGET_OUT_GRID':density_map_saga})
+         
+			
+            processing.run("gdal:translate", {
+                'INPUT':density_map_saga,
+				'TARGET_CRS':None,
+				'NODATA':None,
+				'COPY_SUBDATASETS':False,
+				'OPTIONS':'',
+				'EXTRA':'',
+				'DATA_TYPE':0,
+				'OUTPUT':density_map})  
           
-        processing.run("gdal:translate", {
-            'INPUT':density_map_saga,
-            'TARGET_CRS':None,
-            'NODATA':None,
-            'COPY_SUBDATASETS':False,
-            'OPTIONS':'',
-            'EXTRA':'',
-            'DATA_TYPE':0,
-            'OUTPUT':density_map})  
-          
-
+        else:
+            feedback.pushInfo('Samo en')
+		
+		
         shutil.rmtree(density)
         
 
         all_ = sum_total_all/count
         last = sum_last_all/count
         ground = sum_ground/count
-        txt_all = 'Povprečna gostota vseh odbojev: %s' % all_
-        txt_last = 'Povprečna gostota zadnjih odbojev: %s' % last
-        txt_ground = 'Povprečna gostota talnih točk: %s' % ground
+        txt_all = 'Povprečna gostota vseh odbojev: %s /m2' % all_
+        txt_last = 'Povprečna gostota zadnjih odbojev: %s /m2' % last
+        txt_ground = 'Povprečna gostota talnih točk: %s /m2' % ground
         
         feedback.pushInfo(txt_all)
         feedback.pushInfo(txt_last)
@@ -378,6 +404,8 @@ class ProcessLidar(QgsProcessingAlgorithm):
             f.write('\n') 
             f.write(str(datetime.datetime.now()))        
             f.write('\n') 
+            f.write('Parametri procesiranja lasground: %s.' % proc_parameters)   
+            f.write('\n')   
             f.write('Procesiranih je bilo %s listov.' % count)   
             f.write('\n')             
             f.write(str(txt_all))
@@ -386,7 +414,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
             f.write('\n')    
             f.write(str(txt_ground))
             f.write('\n') 
-            f.write('Seznam listov: gostota talnih točk\n')
+            f.write('Seznam listov: gostota talnih točk (/m2)\n')
             for i in list_ground_points:
                 f.write(i)  
                 f.write('\n')          
