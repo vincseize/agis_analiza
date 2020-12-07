@@ -255,7 +255,7 @@ class UpdateZkn(QgsProcessingAlgorithm):
         #refresh view 
         connection = pg_connect(self, user, password)   
         cursor = connection.cursor()
-        refresh_view = "REFRESH MATERIALIZED VIEW CONCURRENTLY public.\"ZKN parcele\";"
+        refresh_view = "REFRESH MATERIALIZED VIEW public.\"ZKN parcele\";"
         cursor.execute(refresh_view)
         feedback.pushInfo('Materialized view updated')
 
