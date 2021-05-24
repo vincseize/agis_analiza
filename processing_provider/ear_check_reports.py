@@ -18,7 +18,7 @@ from qgis.core import (QgsProject,
                        QgsFeatureSink,
                        QgsProcessingException,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterMapLayer,
+                       QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterVectorLayer,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterFile,
@@ -126,18 +126,14 @@ class EARCheckReports(QgsProcessingAlgorithm):
         """
 
         self.addParameter(
-            QgsProcessingParameterMapLayer(
+            QgsProcessingParameterFeatureSource(
                 'ear_raziskave', 
                 self.tr('Evidenca arheoloških raziskav'), 
                 types=[QgsProcessing.TypeVectorPolygon], 
                 defaultValue='Evidenca arheoloških raziskav'
                 )
             )
-     
-        self.addParameter(QgsProcessingParameterBoolean('ear_analiza', '10  ANALIZA\\EAR\\PDF', optional=True, defaultValue=True))
-        self.addParameter(QgsProcessingParameterBoolean('ear_giscpa', '03 GIS CPA\\Porocila', optional=True, defaultValue=False))
 
- 
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
         # algorithm is run in QGIS).
@@ -152,43 +148,48 @@ class EARCheckReports(QgsProcessingAlgorithm):
                 'INPUT': parameters['ear_raziskave'],
                 'OUTPUT': 'memory:'
             }, context=context)['OUTPUT']
+        ear_reports = []
 
-        total_nr = ear_list.featureCount()
-        total_size = 0
+        for ear in ear_list.getFeatures():
+            ear_id = str(ear[2])
+            ear_reports.append(ear_id)
 
-        layer = QgsProject.instance().mapLayer(parameters['ear_raziskave'])
-        layer.startEditing()
-        def check_everything(layer, ear_path, field):
-            for feature in layer.getFeatures():
-                fields = layer.fields()
-                field_id = fields.indexFromName(field)
-                ear_id = str(feature[2])
-                path = ear_path + ear_id + '.pdf'
-                if os.path.isfile(path):  
-                    size = Path(path).stat().st_size     
+        ear_reports = list(dict.fromkeys(ear_reports))
+
+        feedback.pushInfo('cpa id, velikost (MB) - analiza, status-analiza, velikost (MB) - CPA GIS, status-CPA GIS')          
+
+
+        ear_cpa_path = 'V:\\01 CPA - PODATKOVNE ZBIRKE\\03 GIS CPA\\Porocila\\'
+        ear_path = 'V:\\01 CPA - Projekti\\10  ANALIZA\\EAR\\PDF\\'
+
+        def check_path(path_ear, out_text):
+                if os.path.isfile(path_ear):  
+                    size = Path(path_ear).stat().st_size     
                     size = size / (1024*1024)
-                    size = round(size, 3)
-                    if size < 0.1: 
-                        feedback.reportError('%s; %s MB; Poročilo je pokvarjeno?' % (ear_id, str(size)), False)
+                    size = str(round(size, 3))
+                    if float(size) < 0.1: 
+                        out_text.append(size)
+                        out_text.append('napaka?')
                     else:
-                        feedback.pushInfo(self.tr('%s; %s MB; Poročilo je ok.' % (ear_id, str(size))))                  
+                        out_text.append(size) 
+                        out_text.append('ok')        
                 else:
-                    feedback.reportError('%s; NULL; Poročilo ne obstaja!' % (ear_id), False)
+                    out_text.append('null')
+                    out_text.append('manjka pdf')
 
-        if parameters['ear_giscpa']:
-            ear_path = 'V:\\01 CPA - PODATKOVNE ZBIRKE\\03 GIS CPA\\Porocila\\'
-            field_cpa = QgsField( 'gis cpa pdf', QVariant.Double )
-            layer.addExpressionField( ' NULL ', field_cpa )
-            feedback.pushInfo(self.tr('Preverjam %s.' % ear_path))
-            check_everything(layer, ear_path, 'gis cpa pdf')
-
-        if parameters['ear_analiza']:
-            ear_path = 'V:\\01 CPA - Projekti\\10  ANALIZA\\EAR\\PDF\\'
-            field_analiza = QgsField( 'analiza pdf', QVariant.Double )
-            layer.addExpressionField( ' NULL ', field_analiza )
-            feedback.pushInfo(self.tr('Preverjam %s.' % ear_path))
-            check_everything(layer, ear_path, 'analiza pdf')
-         
+        for ear_id in ear_reports:
+            path_ear = ear_path + ear_id + '.pdf'
+            path_cpa = ear_cpa_path + ear_id + '.pdf'
+            out_text = []
+            out_text.append(ear_id)
+            check_path(path_ear, out_text)
+            check_path(path_cpa, out_text)
+            text = ', '.join(out_text)     
+            if 'napaka?' in out_text or 'manjka pdf' in out_text:
+                feedback.reportError(str(text))
+            else:
+                feedback.pushInfo(str(text))
+                 
         return {}
 
 
