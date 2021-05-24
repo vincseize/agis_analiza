@@ -149,13 +149,13 @@ class EARCheckReports(QgsProcessingAlgorithm):
                 'OUTPUT': 'memory:'
             }, context=context)['OUTPUT']
         ear_reports = []
-
+        
         for ear in ear_list.getFeatures():
             ear_id = str(ear[2])
             ear_reports.append(ear_id)
 
         ear_reports = list(dict.fromkeys(ear_reports))
-
+        ear_reports.sort()
         feedback.pushInfo('cpa id, velikost (MB) - analiza, status-analiza, velikost (MB) - CPA GIS, status-CPA GIS')          
 
 
@@ -176,8 +176,9 @@ class EARCheckReports(QgsProcessingAlgorithm):
                 else:
                     out_text.append('null')
                     out_text.append('manjka pdf')
-
-        for ear_id in ear_reports:
+        
+        total = 100.0 / len(ear_reports) 
+        for current, ear_id in enumerate(ear_reports):
             path_ear = ear_path + ear_id + '.pdf'
             path_cpa = ear_cpa_path + ear_id + '.pdf'
             out_text = []
@@ -189,7 +190,11 @@ class EARCheckReports(QgsProcessingAlgorithm):
                 feedback.reportError(str(text))
             else:
                 feedback.pushInfo(str(text))
-                 
+
+            feedback.setProgress(int(current * total))
+
+            if feedback.isCanceled():
+                break  
         return {}
 
 
