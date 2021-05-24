@@ -13,6 +13,7 @@ from .load_presets import LoadPreset
 from .dopisi_lastniki import DopisiLastnikom
 from .gf_prepare_profiles_topo import GfPrepareProfilesTopo
 from .ear_download_reports import EARDownloadReports
+from .ear_check_reports import EARCheckReports
 from pathlib import Path
 from ..general_modules import (path             
                         )
@@ -32,6 +33,7 @@ class Provider(QgsProcessingProvider):
         self.addAlgorithm(DopisiLastnikom())
         self.addAlgorithm(GfPrepareProfilesTopo())
         self.addAlgorithm(EARDownloadReports())
+        self.addAlgorithm(EARCheckReports())
 
     def id(self):
         return 'agis_analiza'
@@ -42,7 +44,7 @@ class Provider(QgsProcessingProvider):
         This string should be as short as possible (e.g. "Lastools", not
         "Lastools version 1.0.1 64-bit") and localised.
         """
-        return self.tr('AGIS analiza v 0.7.6')
+        return self.tr('AGIS analiza v 0.7.7')
 
     def icon(self):
         """Should return a QIcon which is used for your provider inside

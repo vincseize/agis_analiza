@@ -18,7 +18,7 @@ from qgis.core import (QgsProject,
                        QgsFeatureSink,
                        QgsProcessingException,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterMapLayer,
                        QgsProcessingParameterVectorLayer,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterFile,
@@ -44,7 +44,7 @@ from pathlib import Path
 import shutil
 import os
 
-class EARDownloadReports(QgsProcessingAlgorithm):
+class EARCheckReports(QgsProcessingAlgorithm):
     """
     This is an example algorithm that takes a vector layer and
     creates a new identical one.
@@ -72,7 +72,7 @@ class EARDownloadReports(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return EARDownloadReports()
+        return EARCheckReports()
 
     def name(self):
         """
@@ -82,14 +82,14 @@ class EARDownloadReports(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'ear_download_reports'
+        return 'ear_check_reports'
 
     def displayName(self):
         """
         Returns the translated algorithm name, which should be used for any
         user-visible display of the algorithm name.
         """
-        return self.tr('Kopiraj poročila iz EAR')
+        return self.tr('Preveri poročila EAR')
 
     def group(self):
         """
@@ -114,9 +114,7 @@ class EARDownloadReports(QgsProcessingAlgorithm):
         should provide a basic description about what the algorithm does and the
         parameters and outputs associated with it..
         """
-        help_text = """To orodje prenese PDF-je poročil izbranih raziskav iz Evidence arheoloških raziskav.
-        
-        Vgrajena je varovalka, da ni mogoče hkrati prenesti več kot 500 poročil, zato je nujno izbrati "selected only"!
+        help_text = """To orodje preveri kateri vnosi v EAR imajo pripadajoč PDF. Izpiše se CPA id in velikost PDF-ja v bytih, če obstaja. 
         
         """
         return self.tr(help_text)
@@ -128,22 +126,17 @@ class EARDownloadReports(QgsProcessingAlgorithm):
         """
 
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
+            QgsProcessingParameterMapLayer(
                 'ear_raziskave', 
                 self.tr('Evidenca arheoloških raziskav'), 
                 types=[QgsProcessing.TypeVectorPolygon], 
                 defaultValue='Evidenca arheoloških raziskav'
                 )
             )
+     
+        self.addParameter(QgsProcessingParameterBoolean('ear_analiza', '10  ANALIZA\\EAR\\PDF', optional=True, defaultValue=True))
+        self.addParameter(QgsProcessingParameterBoolean('ear_giscpa', '03 GIS CPA\\Porocila', optional=True, defaultValue=False))
 
-        self.addParameter(
-            QgsProcessingParameterFile(
-                'pdf_out', 
-                self.tr('Ciljna mapa za poročila'), 
-                behavior=QgsProcessingParameterFile.Folder, 
-                fileFilter='All files (*.*)'
-                )
-            )
  
         # We add a feature sink in which to store our processed features (this
         # usually takes the form of a newly created vector layer when the
@@ -163,61 +156,39 @@ class EARDownloadReports(QgsProcessingAlgorithm):
         total_nr = ear_list.featureCount()
         total_size = 0
 
-        feedback.pushInfo(self.tr('Izbranih je %s raziskav.' % total_nr))
-
-        if  total_nr > 500:
-            raise QgsProcessingException('Preveč raziskav: %s, dovoljeno je do 500!' %total_nr)
-        else:
-            feedback.pushInfo(self.tr('Kopiram poročila: ' ))
-
-        ear_path = 'V:\\01 CPA - Projekti\\10  ANALIZA\\EAR\\PDF\\'
-        ear_dest = parameters['pdf_out'] + '\\'
-        ear_reports = []
-      
-
-        for ear in ear_list.getFeatures():
-            ear_id = str(ear[2])
-            path = ear_path + ear_id + '.pdf'
-            destination = ear_dest  + ear_id + '.pdf'
-            
-            if os.path.isfile(destination) and os.path.isfile(path):
-                dest_size = Path(destination).stat().st_size
-                size = Path(path).stat().st_size
-                if dest_size == size:
-                    feedback.pushDebugInfo(self.tr('%s že obstaja v ciljni mapi.' %  str(ear_id)))
+        layer = QgsProject.instance().mapLayer(parameters['ear_raziskave'])
+        layer.startEditing()
+        def check_everything(layer, ear_path, field):
+            for feature in layer.getFeatures():
+                fields = layer.fields()
+                field_id = fields.indexFromName(field)
+                ear_id = str(feature[2])
+                path = ear_path + ear_id + '.pdf'
+                if os.path.isfile(path):  
+                    size = Path(path).stat().st_size     
+                    size = size / (1024*1024)
+                    size = round(size, 3)
+                    if size < 0.1: 
+                        feedback.reportError('%s; %s MB; Poročilo je pokvarjeno?' % (ear_id, str(size)), False)
+                    else:
+                        feedback.pushInfo(self.tr('%s; %s MB; Poročilo je ok.' % (ear_id, str(size))))                  
                 else:
-                    ear_reports.append(ear_id)
-                    total_size += size
-            elif os.path.isfile(path):
-                size = Path(path).stat().st_size
-                ear_reports.append(ear_id)
-                total_size += size     
-            else:
-                feedback.reportError(self.tr('PDF %s ne obstaja?!' % str(ear_id)))
+                    feedback.reportError('%s; NULL; Poročilo ne obstaja!' % (ear_id), False)
 
-        total_nr = len(ear_reports)
-        feedback.pushInfo(self.tr('Kopiram %s poročil v velikosti %s MB' % (str(total_nr), str(round((total_size/1024/1024),2)))))
-        transffered = 0
-        total_chunks = total_size/5000 if total_size> 0 else 1
-        total = 100/(total_size/1024/1024)
-        
+        if parameters['ear_giscpa']:
+            ear_path = 'V:\\01 CPA - PODATKOVNE ZBIRKE\\03 GIS CPA\\Porocila\\'
+            field_cpa = QgsField( 'gis cpa pdf', QVariant.Double )
+            layer.addExpressionField( ' NULL ', field_cpa )
+            feedback.pushInfo(self.tr('Preverjam %s.' % ear_path))
+            check_everything(layer, ear_path, 'gis cpa pdf')
 
-        def name(id_porocila, ear_path, ear_dest, total):
-            out_pdf =  ear_path + str(id_porocila) + '.pdf'
-            destination = ear_dest + str(id_porocila) + '.pdf'
-            feedback.pushDebugInfo(self.tr('Kopiram %s.' % id_porocila))
-            feedback.pushDebugInfo(self.tr('Kopiram %s.' % destination))
-            feedback.pushDebugInfo(self.tr('Kopiram %s.' % out_pdf))
-            shutil.copy(out_pdf, destination)
-            size = Path(destination).stat().st_size
-            curr_size = size/1024/1024
-            feedback.setProgress( curr_size * total)
-
-        for current, i in enumerate(ear_reports):
-            name(i, ear_path, ear_dest, total)
-
-        feedback.pushInfo(self.tr('Konec'))
-       
+        if parameters['ear_analiza']:
+            ear_path = 'V:\\01 CPA - Projekti\\10  ANALIZA\\EAR\\PDF\\'
+            field_analiza = QgsField( 'analiza pdf', QVariant.Double )
+            layer.addExpressionField( ' NULL ', field_analiza )
+            feedback.pushInfo(self.tr('Preverjam %s.' % ear_path))
+            check_everything(layer, ear_path, 'analiza pdf')
+         
         return {}
 
 
