@@ -163,36 +163,42 @@ class EARCheckReports(QgsProcessingAlgorithm):
         ear_path = 'V:\\01 CPA - Projekti\\10  ANALIZA\\EAR\\PDF\\'
 
         def check_path(path_ear, out_text):
-                if os.path.isfile(path_ear):  
-                    size = Path(path_ear).stat().st_size     
-                    size = size / (1024*1024)
-                    size = str(round(size, 3))
-                    if float(size) < 0.1: 
-                        out_text.append(size)
-                        out_text.append('napaka?')
-                    else:
-                        out_text.append(size) 
-                        out_text.append('ok')        
-                else:
-                    out_text.append('null')
-                    out_text.append('manjka pdf')
-        
+            if os.path.isfile(path_ear):  
+                size = Path(path_ear).stat().st_size     
+                size = size / (1024*1024)
+                size = str(round(size, 3))
+                if float(size) < 0.01: 
+                    out_text.append(size)
+                    out_text.append('napaka?')
+                else:                      
+                    out_text.append(size) 
+                    out_text.append('ok')        
+            else:
+                out_text.append('null')
+                out_text.append('manjka pdf')
+                size = 'null'
+            return size
+
         total = 100.0 / len(ear_reports) 
         for current, ear_id in enumerate(ear_reports):
             path_ear = ear_path + ear_id + '.pdf'
             path_cpa = ear_cpa_path + ear_id + '.pdf'
             out_text = []
-            out_text.append(ear_id)
-            check_path(path_ear, out_text)
-            check_path(path_cpa, out_text)
-            text = ', '.join(out_text)     
+            out_text.append(ear_id)       
+            ear_size = check_path(path_ear, out_text)     
+            cpa_size = check_path(path_cpa, out_text)           
             if 'napaka?' in out_text or 'manjka pdf' in out_text:
+                text = ', '.join(out_text)     
                 feedback.reportError(str(text))
-            else:
+            elif cpa_size == 'null' and ear_size != 'null':
+                out_text[4] = 'Ni posodobljeno?'
+                text = ', '.join(out_text)
                 feedback.pushInfo(str(text))
-
+            elif cpa_size != ear_size:
+                out_text[4] = 'Ni posodobljeno?'
+                text = ', '.join(out_text)
+                feedback.reportError(str(text))
             feedback.setProgress(int(current * total))
-
             if feedback.isCanceled():
                 break  
         return {}
