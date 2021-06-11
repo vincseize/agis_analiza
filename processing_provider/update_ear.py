@@ -180,6 +180,9 @@ class UpdateEar(QgsProcessingAlgorithm):
         param = QgsProcessingParameterField('podmetoda', 'podmetoda', type=QgsProcessingParameterField.Any, parentLayerParameterName=self.INPUT, allowMultiple=False, optional=True,defaultValue='podmetoda')
         param.setFlags(param.flags() | QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param)
+        param = QgsProcessingParameterField('hiperlink_na_fulltext', 'hiperlink_na_fulltext', type=QgsProcessingParameterField.Any, parentLayerParameterName=self.INPUT, allowMultiple=False, optional=True,defaultValue='hiperlink_na_fulltext')
+        param.setFlags(param.flags() | QgsProcessingParameterDefinition.FlagAdvanced)
+        self.addParameter(param)
         param = QgsProcessingParameterField('rezultati', 'rezultati', type=QgsProcessingParameterField.Any, parentLayerParameterName=self.INPUT, allowMultiple=False, optional=True,defaultValue='rezultati')
         param.setFlags(param.flags() | QgsProcessingParameterDefinition.FlagAdvanced)
         self.addParameter(param)
@@ -260,12 +263,26 @@ class UpdateEar(QgsProcessingAlgorithm):
                 izvajalec	=	feature[parameters['izvajalec']]
                 metoda	=	feature[parameters['metoda']]
                 podmetoda	=	feature[parameters['podmetoda']]
+                link_string = 'V:\\01 CPA - PODATKOVNE ZBIRKE\\03 GIS CPA\\Porocila\\' + str(feature[parameters['por_stevilka_cpa']]) + '.pdf'
+
+                feedback.pushInfo(link_string)
+                if os.path.isfile(link_string):
+                    feedback.pushInfo('Poročilo %s obstaja' %por_stevilka_cpa)
+                    hiperlink_na_fulltext = '\'' + str(feature[parameters['por_stevilka_cpa']]) + '.pdf\''
+                else:
+                    feedback.pushInfo('Poročilo %s ne obstaja' %por_stevilka_cpa)
+                    hiperlink_na_fulltext = '\'Poročila ni v evidenci!\''
                 rezultati	=	feature[parameters['rezultati']]
                 nasutje	=	feature[parameters['nasutje']]
-                globina	=	feature[parameters['globina']]
+                
+                globina	=	str(feature[parameters['globina']])
+                feedback.pushInfo(str(globina))
+                if globina == "NULL":
+                    globina	= 0
+                feedback.pushInfo(str(globina))
                 kaj	=	feature[parameters['kaj']]
-                koda_raziskave	=	feature[parameters['koda_raziskave']]
-                sql_insert = "INSERT INTO \"Evidenca_arheoloskih_raziskav\".\"Porocila za SHP\" (\"Porocila_stevilka_CPA\", \"poseg_stevilka_CPA\", naslov, ro, avtorji, datum, leto, investitor, izvajalec, metoda, podmetoda, rezultati, nasutje, globina, kaj, koda_raziskave) VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %s, \'%s\', \'%s\', \'%s\', \'%s\', %s, %s, %s, \'%s\', \'%s\')" % (por_stevilka_cpa, poseg_stevilka_cpa, naslov, ro, avtorji, datum, leto, investitor, izvajalec, metoda, podmetoda, rezultati, nasutje, globina, kaj, koda_raziskave)     
+                koda_raziskave	=	feature[parameters['koda_raziskave']]        
+                sql_insert = "INSERT INTO \"Evidenca_arheoloskih_raziskav\".\"Porocila za SHP\" (\"Porocila_stevilka_CPA\", \"poseg_stevilka_CPA\", naslov, ro, avtorji, datum, leto, investitor, izvajalec, metoda, podmetoda, hiperlink_na_fulltext, rezultati, nasutje, globina, kaj, koda_raziskave) VALUES (\'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', %s, \'%s\', \'%s\', \'%s\', \'%s\', %s, %s, %s, \'%s\', \'%s\', \'%s\')" % (por_stevilka_cpa, poseg_stevilka_cpa, naslov, ro, avtorji, datum, leto, investitor, izvajalec, metoda, podmetoda, hiperlink_na_fulltext, rezultati, nasutje, globina, kaj, koda_raziskave)     
                 feedback.pushInfo(sql_insert)
                 cursor.execute(sql_insert)
                 if current % 100 == 0:

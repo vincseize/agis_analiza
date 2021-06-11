@@ -44,7 +44,7 @@ class Provider(QgsProcessingProvider):
         This string should be as short as possible (e.g. "Lastools", not
         "Lastools version 1.0.1 64-bit") and localised.
         """
-        return self.tr('AGIS analiza v 0.7.7')
+        return self.tr('AGIS analiza v 0.7.8')
 
     def icon(self):
         """Should return a QIcon which is used for your provider inside
