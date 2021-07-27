@@ -147,7 +147,7 @@ class ProcessLidar(QgsProcessingAlgorithm):
                 'proc_parameters',
                 'Parametri za LASground',  
                  multiLine=False, 
-                 defaultValue='-step 5 -bulge 4 -spike 0.05 -down_spike 0.05 -offset 0.05 -hyper_fine'
+                 defaultValue='-step 5 -bulge 4 -spike 0.25 -down_spike 0.25 -offset 3 -hyper_fine'
                  )
             )
 
